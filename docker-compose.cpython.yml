@@ -1,0 +1,20 @@
+version: '3'
+
+services:
+  pagen-cpython:
+    build:
+      context: .
+      args:
+        - IMAGE_NAME=${CPYTHON_IMAGE_NAME}
+        - IMAGE_VERSION=${CPYTHON_IMAGE_VERSION}
+    image: lycantropos/pagen-cpython:0.0.0
+    volumes:
+      - ./Cargo.toml:/opt/pagen/Cargo.toml
+      - ./pagen:/opt/pagen/pagen
+      - ./pyproject.toml:/opt/pagen/pyproject.toml
+      - ./README.md:/opt/pagen/README.md
+      - ./rust-toolchain.toml:/opt/pagen/rust-toolchain.toml
+      - ./setup.py:/opt/pagen/setup.py
+      - ./src:/opt/pagen/src
+      - ./tests:/opt/pagen/tests
+    entrypoint: pytest

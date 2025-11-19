@@ -1,0 +1,22 @@
+[package]
+name = "pagen"
+description = "Parser generator."
+license = "MIT"
+version = "0.0.0"
+rust-version = "1.71.0"
+edition = "2021"
+
+[lib]
+name = "pagen"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies.pyo3]
+version = "^0.27.1"
+features = ["extension-module"]
+optional = true
+
+[build-dependencies]
+pyo3-build-config = "^0.27.1"
+
+[features]
+python_binding = ["dep:pyo3"]

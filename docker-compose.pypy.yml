@@ -1,0 +1,17 @@
+version: '3'
+
+services:
+  pagen-pypy:
+    build:
+      context: .
+      args:
+        - IMAGE_NAME=${PYPY_IMAGE_NAME}
+        - IMAGE_VERSION=${PYPY_IMAGE_VERSION}
+    image: lycantropos/pagen-pypy:0.0.0
+    volumes:
+      - ./pagen:/opt/pagen/pagen
+      - ./pyproject.toml:/opt/pagen/pyproject.toml
+      - ./README.md:/opt/pagen/README.md
+      - ./setup.py:/opt/pagen/setup.py
+      - ./tests:/opt/pagen/tests
+    entrypoint: pytest

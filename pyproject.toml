@@ -1,0 +1,105 @@
+[project]
+name = "pagen"
+description = "Parser generator."
+authors = [{ name = "Azat Ibrakov", email = "azatibrakov@gmail.com" }]
+readme = "README.md"
+license = { file = "LICENSE" }
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy"
+]
+requires-python = ">=3.10"
+dependencies = []
+dynamic = ["version"]
+
+[project.optional-dependencies]
+docs = [
+    "Sphinx>=7.2.6,<9.0",
+    "sphinx-rtd-theme>=2.0.0,<3.0"
+]
+tests = [
+    "hypothesis>=6.148.2,<7.0",
+    "pytest>=9.0.1,<10.0",
+]
+
+[build-system]
+requires = [
+    "setuptools-rust>=1.12.0,<2.0; platform_python_implementation=='CPython'",
+    "setuptools",
+    "wheel"
+]
+build-backend = "setuptools.build_meta"
+
+[tool.bumpversion]
+current_version = "0.0.0"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
+search = "{current_version}"
+replace = "{new_version}"
+regex = false
+ignore_missing_version = false
+ignore_missing_files = false
+tag = true
+sign_tags = false
+tag_name = "v{new_version}"
+tag_message = "Bump version: {current_version} → {new_version}"
+allow_dirty = false
+commit = true
+message = "Bump version: {current_version} → {new_version}"
+moveable_tags = []
+commit_args = ""
+setup_hooks = []
+pre_commit_hooks = []
+post_commit_hooks = []
+files = [
+    { "filename" = "docker-compose.cpython.yml" },
+    { "filename" = "docker-compose.pypy.yml" },
+    { "filename" = "pagen/__init__.py" },
+]
+
+[tool.coverage.run]
+source = ["pagen"]
+
+[tool.pytest.ini_options]
+addopts = "--verbose -s --hypothesis-profile=default"
+
+[tool.ruff]
+line-length = 79
+
+[tool.ruff.format]
+docstring-code-format = true
+quote-style = "single"
+skip-magic-trailing-comma = true
+
+[tool.ruff.lint]
+select = [
+    # flake8-bugbear
+    "B",
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # isort
+    "I",
+    # flake8-simplify
+    "SIM",
+    # pyupgrade
+    "UP",
+]
+ignore = [
+    "E203", # Whitespace before ':'
+]
+
+[tool.ruff.lint.isort]
+case-sensitive = true
+combine-as-imports = true
+known-local-folder = ["tests"]
+relative-imports-order = "closest-to-furthest"
+split-on-trailing-comma = false
+
+[tool.setuptools.dynamic]
+version = { attr = "pagen.__version__" }
