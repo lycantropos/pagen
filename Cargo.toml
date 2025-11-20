@@ -1,10 +1,11 @@
 [package]
 name = "pagen"
 description = "Parser generator."
-license = "MIT"
-version = "0.0.0"
-rust-version = "1.71.0"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/lycantropos/pagen"
+rust-version = "1.71.0"
+version = "0.0.0"
 
 [lib]
 name = "pagen"
