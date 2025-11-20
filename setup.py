@@ -13,6 +13,6 @@ if sys.implementation.name == 'cpython':
     from setuptools_rust import RustExtension
 
     parameters.update(
-        rust_extensions=[RustExtension('pagen._pagen')], zip_safe=False
+        rust_extensions=[RustExtension('pagen._cpagen')], zip_safe=False
     )
 setup(**parameters)
