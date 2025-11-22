@@ -11,6 +11,8 @@ or any later version (`python3.11`, `pypy3.11` and so on).
 
 ## Installation
 
+### Prerequisites
+
 Install the latest `pip` & `setuptools` packages versions
 
 ```bash
@@ -104,7 +106,7 @@ Pretty neat, isn't it?
 
 ### Bumping version
 
-#### Preparation
+#### Prerequisites
 
 Install [bump-my-version](https://github.com/callowayproject/bump-my-version#installation).
 
@@ -132,19 +134,23 @@ This will set version to `major.minor.patch`.
 
 ### Running tests
 
-Install dependencies
+#### Plain
+
+Install with dependencies
 
 ```bash
-python -m pip install -r requirements-tests.txt
+python -m pip install -e '.[tests]'
 ```
 
-Plain
+Run
 
 ```bash
 pytest
 ```
 
-Inside `Docker` container:
+#### `Docker` container
+
+Run
 
 - with `CPython`
 
@@ -158,7 +164,9 @@ Inside `Docker` container:
   docker-compose --file docker-compose.pypy.yml up
   ```
 
-`Bash` script:
+#### `Bash` script
+
+Run
 
 - with `CPython`
 
@@ -178,7 +186,9 @@ Inside `Docker` container:
   ./run-tests.sh pypy
   ```
 
-`PowerShell` script:
+#### `PowerShell` script
+
+Run
 
 - with `CPython`
 
