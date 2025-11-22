@@ -1,17 +1,15 @@
-pagen
-=====
+# pagen
 
-[![](https://github.com/lycantropos/pagen/workflows/CI/badge.svg)](https://github.com/lycantropos/pagen/actions/workflows/ci.yml "Github Actions")
-[![](https://codecov.io/gh/lycantropos/pagen/branch/master/graph/badge.svg)](https://codecov.io/gh/lycantropos/pagen "Codecov")
-[![](https://img.shields.io/github/license/lycantropos/pagen.svg)](https://github.com/lycantropos/pagen/blob/master/LICENSE "License")
-[![](https://badge.fury.io/py/pagen.svg)](https://badge.fury.io/py/pagen "PyPI")
-[![](https://img.shields.io/crates/v/pagen.svg)](https://crates.io/crates/pagen "crates.io")
+[![Github Actions](https://github.com/lycantropos/pagen/workflows/CI/badge.svg)](https://github.com/lycantropos/pagen/actions/workflows/ci.yml "Github Actions")
+[![Codecov](https://codecov.io/gh/lycantropos/pagen/branch/master/graph/badge.svg)](https://codecov.io/gh/lycantropos/pagen "Codecov")
+[![License](https://img.shields.io/github/license/lycantropos/pagen.svg)](https://github.com/lycantropos/pagen/blob/master/LICENSE "License")
+[![PyPI](https://badge.fury.io/py/pagen.svg)](https://badge.fury.io/py/pagen "PyPI")
+[![crates.io](https://img.shields.io/crates/v/pagen.svg)](https://crates.io/crates/pagen "crates.io")
 
 In what follows `python` is an alias for `python3.10` or `pypy3.10`
 or any later version (`python3.11`, `pypy3.11` and so on).
 
-Installation
-------------
+## Installation
 
 Install the latest `pip` & `setuptools` packages versions
 
@@ -42,8 +40,7 @@ Install
 python -m pip install -e '.'
 ```
 
-Usage
------
+## Usage
 
 Let's parse PEG's own grammar
 described in [its paper by Bryan Ford](https://bford.info/pub/lang/peg.pdf):
@@ -97,13 +94,13 @@ described in [its paper by Bryan Ford](https://bford.info/pub/lang/peg.pdf):
 True
 
 ```
+
 As we can see PEG grammar is successfully parsed
 and the resulting grammar recognizes its original definition.
 
 Pretty neat, isn't it?
 
-Development
------------
+## Development
 
 ### Bumping version
 
@@ -150,10 +147,13 @@ pytest
 Inside `Docker` container:
 
 - with `CPython`
+
   ```bash
   docker-compose --file docker-compose.cpython.yml up
   ```
+
 - with `PyPy`
+
   ```bash
   docker-compose --file docker-compose.pypy.yml up
   ```
@@ -161,15 +161,19 @@ Inside `Docker` container:
 `Bash` script:
 
 - with `CPython`
+
   ```bash
   ./run-tests.sh
   ```
+
   or
+
   ```bash
   ./run-tests.sh cpython
   ```
 
 - with `PyPy`
+
   ```bash
   ./run-tests.sh pypy
   ```
@@ -177,14 +181,19 @@ Inside `Docker` container:
 `PowerShell` script:
 
 - with `CPython`
+
   ```powershell
   .\run-tests.ps1
   ```
+
   or
+
   ```powershell
   .\run-tests.ps1 cpython
   ```
+
 - with `PyPy`
+
   ```powershell
   .\run-tests.ps1 pypy
   ```
