@@ -39,8 +39,68 @@ cd pagen
 Install
 
 ```bash
-python setup.py install
+python -m pip install -e '.'
 ```
+
+Usage
+-----
+
+Let's parse PEG's own grammar
+described in [its paper by Bryan Ford](https://bford.info/pub/lang/peg.pdf):
+
+```python
+>>> from pagen.parsing import parse_grammar, is_mismatch
+>>> peg_grammar_string = """\
+... # Hierarchical syntax
+... Grammar <- Spacing Definition+ EndOfFile
+... Definition <- Identifier LEFTARROW Expression
+... Expression <- Sequence (SLASH Sequence)*
+... Sequence <- Prefix+
+... Prefix <- (AND / NOT)? Suffix
+... Suffix <- Primary (QUESTION / STAR / PLUS)?
+... Primary <- Identifier !LEFTARROW
+... / OPEN Expression CLOSE
+... / Literal / Class / DOT
+...
+... # Lexical syntax
+... Identifier <- IdentStart IdentCont* Spacing
+... IdentStart <- [a-zA-Z_]
+... IdentCont <- IdentStart / [0-9]
+... Literal <- ['] (!['] Char)* ['] Spacing
+... / ["] (!["] Char)* ["] Spacing
+... Class <- '[' (!']' Range)* ']' Spacing
+... Range <- Char '-' Char / Char
+... Char <- '\\\\' [nrt'"\\[\\]\\\\]
+... / '\\\\' [0-2][0-7][0-7]
+... / '\\\\' [0-7][0-7]?
+... / !'\\\\' .
+... LEFTARROW <- '<-' Spacing
+... SLASH <- '/' Spacing
+... AND <- '&' Spacing
+... NOT <- '!' Spacing
+... QUESTION <- '?' Spacing
+... STAR <- '*' Spacing
+... PLUS <- '+' Spacing
+... OPEN <- '(' Spacing
+... CLOSE <- ')' Spacing
+... DOT <- '.' Spacing
+... Spacing <- (Space / Comment)*
+... Comment <- '#' (!EndOfLine .)* EndOfLine
+... EndOfLine <- '\\r\\n' / '\\n' / '\\r'
+... Space <- ' ' / '\\t' / EndOfLine
+... EndOfFile <- !.
+... """
+>>> peg_grammar = parse_grammar(peg_grammar_string)
+>>> not is_mismatch(
+...     peg_grammar.parse(peg_grammar_string, starting_rule_name='Grammar')
+... )
+True
+
+```
+As we can see PEG grammar is successfully parsed
+and the resulting grammar recognizes its original definition.
+
+Pretty neat, isn't it?
 
 Development
 -----------
