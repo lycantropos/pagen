@@ -165,7 +165,7 @@ jobs:
           fail_ci_if_error: false
           files: ./coverage_python.xml
           token: ${{ secrets.CODECOV_TOKEN }}
-        if: ${{ !startsWith(matrix.python_version, 'pypy') }}
+        if: ${{ startsWith(matrix.python_version, 'pypy') }}
         continue-on-error: true
       - name: 'Upload СPython coverage'
         uses: codecov/codecov-action@v5
