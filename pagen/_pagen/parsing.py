@@ -72,7 +72,10 @@ class RuleName(str, Enum):
     END_OF_FILE = 'END_OF_FILE'
     END_OF_LINE = 'END_OF_LINE'
     EXPRESSION = Expression.__name__
+    FILLER = 'Filler'
     GRAMMAR = Grammar.__name__
+    IDENTIFIER = 'Identifier'
+    LEFT_ARROW = 'LEFT_ARROW'
     NEGATIVE_LOOKAHEAD = NegativeLookaheadExpression.__name__
     ONE_OR_MORE = OneOrMoreExpression.__name__
     OPTIONAL = OptionalExpression.__name__
@@ -84,10 +87,12 @@ class RuleName(str, Enum):
     RULE = Rule.__name__
     RULE_REFERENCE = RuleReference.__name__
     SEQUENCE = SequenceExpression.__name__
+    SINGLE_LINE_COMMENT = 'SingleLineComment'
     SINGLE_QUOTED_LITERAL = SingleQuotedLiteralExpression.__name__
     SINGLE_QUOTED_LITERAL_CHARACTER = (
         f'{SingleQuotedLiteralExpression.__name__}Character'
     )
+    SPACE = 'Space'
     ZERO_OR_MORE = ZeroOrMoreExpression.__name__
 
     @override
@@ -115,7 +120,7 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
     ),
 )
 PARSER_GRAMMAR_BUILDER.add_expression_builder(
-    'Space',
+    RuleName.SPACE,
     PrioritizedChoiceExpressionBuilder(
         [
             PARSER_GRAMMAR_BUILDER.get_reference(RuleName.END_OF_LINE),
@@ -125,7 +130,7 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
     ),
 )
 PARSER_GRAMMAR_BUILDER.add_expression_builder(
-    'Comment',
+    RuleName.SINGLE_LINE_COMMENT,
     SequenceExpressionBuilder(
         [
             SingleQuotedLiteralExpressionBuilder('#'),
@@ -146,103 +151,24 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
     ),
 )
 PARSER_GRAMMAR_BUILDER.add_expression_builder(
-    'Spacing',
+    RuleName.FILLER,
     ZeroOrMoreExpressionBuilder(
         PrioritizedChoiceExpressionBuilder(
             [
-                PARSER_GRAMMAR_BUILDER.get_reference('Space'),
-                PARSER_GRAMMAR_BUILDER.get_reference('Comment'),
+                PARSER_GRAMMAR_BUILDER.get_reference(RuleName.SPACE),
+                PARSER_GRAMMAR_BUILDER.get_reference(
+                    RuleName.SINGLE_LINE_COMMENT
+                ),
             ]
         )
     ),
 )
 PARSER_GRAMMAR_BUILDER.add_expression_builder(
-    'LEFTARROW',
+    RuleName.LEFT_ARROW,
     SequenceExpressionBuilder(
         [
             SingleQuotedLiteralExpressionBuilder('<-'),
-            PARSER_GRAMMAR_BUILDER.get_reference('Spacing'),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_expression_builder(
-    'SLASH',
-    SequenceExpressionBuilder(
-        [
-            SingleQuotedLiteralExpressionBuilder('/'),
-            PARSER_GRAMMAR_BUILDER.get_reference('Spacing'),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_expression_builder(
-    'AND',
-    SequenceExpressionBuilder(
-        [
-            SingleQuotedLiteralExpressionBuilder('&'),
-            PARSER_GRAMMAR_BUILDER.get_reference('Spacing'),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_expression_builder(
-    'NOT',
-    SequenceExpressionBuilder(
-        [
-            SingleQuotedLiteralExpressionBuilder('!'),
-            PARSER_GRAMMAR_BUILDER.get_reference('Spacing'),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_expression_builder(
-    'QUESTION',
-    SequenceExpressionBuilder(
-        [
-            SingleQuotedLiteralExpressionBuilder('?'),
-            PARSER_GRAMMAR_BUILDER.get_reference('Spacing'),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_expression_builder(
-    'STAR',
-    SequenceExpressionBuilder(
-        [
-            SingleQuotedLiteralExpressionBuilder('*'),
-            PARSER_GRAMMAR_BUILDER.get_reference('Spacing'),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_expression_builder(
-    'PLUS',
-    SequenceExpressionBuilder(
-        [
-            SingleQuotedLiteralExpressionBuilder('+'),
-            PARSER_GRAMMAR_BUILDER.get_reference('Spacing'),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_expression_builder(
-    'OPEN',
-    SequenceExpressionBuilder(
-        [
-            SingleQuotedLiteralExpressionBuilder('('),
-            PARSER_GRAMMAR_BUILDER.get_reference('Spacing'),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_expression_builder(
-    'CLOSE',
-    SequenceExpressionBuilder(
-        [
-            SingleQuotedLiteralExpressionBuilder(')'),
-            PARSER_GRAMMAR_BUILDER.get_reference('Spacing'),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_expression_builder(
-    'DOT',
-    SequenceExpressionBuilder(
-        [
-            SingleQuotedLiteralExpressionBuilder('.'),
-            PARSER_GRAMMAR_BUILDER.get_reference('Spacing'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
         ]
     ),
 )
@@ -383,7 +309,7 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
                 )
             ),
             SingleQuotedLiteralExpressionBuilder(']'),
-            PARSER_GRAMMAR_BUILDER.get_reference('Spacing'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
         ]
     ),
 )
@@ -405,7 +331,7 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
                 )
             ),
             SingleQuotedLiteralExpressionBuilder(']'),
-            PARSER_GRAMMAR_BUILDER.get_reference('Spacing'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
         ]
     ),
 )
@@ -429,7 +355,7 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
                 )
             ),
             CharacterClassExpressionBuilder([CharacterSet("'")]),
-            PARSER_GRAMMAR_BUILDER.get_reference('Spacing'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
         ]
     ),
 )
@@ -453,12 +379,12 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
                 )
             ),
             CharacterClassExpressionBuilder([CharacterSet('"')]),
-            PARSER_GRAMMAR_BUILDER.get_reference('Spacing'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
         ]
     ),
 )
 PARSER_GRAMMAR_BUILDER.add_expression_builder(
-    'Identifier',
+    RuleName.IDENTIFIER,
     SequenceExpressionBuilder(
         [
             CharacterClassExpressionBuilder(
@@ -482,16 +408,22 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
     ),
 )
 PARSER_GRAMMAR_BUILDER.add_expression_builder(
-    RuleName.ANY_CHARACTER, PARSER_GRAMMAR_BUILDER.get_reference('DOT')
+    RuleName.ANY_CHARACTER,
+    SequenceExpressionBuilder(
+        [
+            SingleQuotedLiteralExpressionBuilder('.'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
+        ]
+    ),
 )
 PARSER_GRAMMAR_BUILDER.add_expression_builder(
     RuleName.RULE_REFERENCE,
     SequenceExpressionBuilder(
         [
-            PARSER_GRAMMAR_BUILDER.get_reference('Identifier'),
-            PARSER_GRAMMAR_BUILDER.get_reference('Spacing'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.IDENTIFIER),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
             NegativeLookaheadExpressionBuilder(
-                PARSER_GRAMMAR_BUILDER.get_reference('LEFTARROW')
+                PARSER_GRAMMAR_BUILDER.get_reference(RuleName.LEFT_ARROW)
             ),
         ]
     ),
@@ -502,9 +434,11 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
         [
             SequenceExpressionBuilder(
                 [
-                    PARSER_GRAMMAR_BUILDER.get_reference('OPEN'),
+                    SingleQuotedLiteralExpressionBuilder('('),
+                    PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
                     PARSER_GRAMMAR_BUILDER.get_reference(RuleName.EXPRESSION),
-                    PARSER_GRAMMAR_BUILDER.get_reference('CLOSE'),
+                    SingleQuotedLiteralExpressionBuilder(')'),
+                    PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
                 ]
             ),
             PARSER_GRAMMAR_BUILDER.get_reference(RuleName.ANY_CHARACTER),
@@ -527,7 +461,8 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
     SequenceExpressionBuilder(
         [
             PARSER_GRAMMAR_BUILDER.get_reference('Primary'),
-            PARSER_GRAMMAR_BUILDER.get_reference('QUESTION'),
+            SingleQuotedLiteralExpressionBuilder('?'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
         ]
     ),
 )
@@ -536,7 +471,8 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
     SequenceExpressionBuilder(
         [
             PARSER_GRAMMAR_BUILDER.get_reference('Primary'),
-            PARSER_GRAMMAR_BUILDER.get_reference('PLUS'),
+            SingleQuotedLiteralExpressionBuilder('+'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
         ]
     ),
 )
@@ -545,7 +481,8 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
     SequenceExpressionBuilder(
         [
             PARSER_GRAMMAR_BUILDER.get_reference('Primary'),
-            PARSER_GRAMMAR_BUILDER.get_reference('STAR'),
+            SingleQuotedLiteralExpressionBuilder('*'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
         ]
     ),
 )
@@ -553,7 +490,8 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
     RuleName.NEGATIVE_LOOKAHEAD,
     SequenceExpressionBuilder(
         [
-            PARSER_GRAMMAR_BUILDER.get_reference('NOT'),
+            SingleQuotedLiteralExpressionBuilder('!'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
             PARSER_GRAMMAR_BUILDER.get_reference(RuleName.ATOM),
         ]
     ),
@@ -562,7 +500,8 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
     RuleName.POSITIVE_LOOKAHEAD,
     SequenceExpressionBuilder(
         [
-            PARSER_GRAMMAR_BUILDER.get_reference('AND'),
+            SingleQuotedLiteralExpressionBuilder('&'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
             PARSER_GRAMMAR_BUILDER.get_reference(RuleName.ATOM),
         ]
     ),
@@ -610,7 +549,8 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
             OneOrMoreExpressionBuilder(
                 SequenceExpressionBuilder(
                     [
-                        PARSER_GRAMMAR_BUILDER.get_reference('SLASH'),
+                        SingleQuotedLiteralExpressionBuilder('/'),
+                        PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
                         PARSER_GRAMMAR_BUILDER.get_reference(
                             RuleName.PRIORITIZED_CHOICE_VARIANT
                         ),
@@ -635,9 +575,9 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
     RuleName.RULE,
     SequenceExpressionBuilder(
         [
-            PARSER_GRAMMAR_BUILDER.get_reference('Identifier'),
-            PARSER_GRAMMAR_BUILDER.get_reference('Spacing'),
-            PARSER_GRAMMAR_BUILDER.get_reference('LEFTARROW'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.IDENTIFIER),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.LEFT_ARROW),
             PARSER_GRAMMAR_BUILDER.get_reference(RuleName.EXPRESSION),
         ]
     ),
@@ -646,7 +586,7 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
     RuleName.GRAMMAR,
     SequenceExpressionBuilder(
         [
-            PARSER_GRAMMAR_BUILDER.get_reference('Spacing'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
             OneOrMoreExpressionBuilder(
                 PARSER_GRAMMAR_BUILDER.get_reference(RuleName.RULE)
             ),
