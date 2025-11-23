@@ -7,6 +7,32 @@ CharacterSet = _module.CharacterSet
 
 # expressions
 Expression = _module.Expression
+AnyCharacterExpression = _module.AnyCharacterExpression
+CharacterClassExpression = _module.CharacterClassExpression
+ComplementedCharacterClassExpression = (
+    _module.ComplementedCharacterClassExpression
+)
+DoubleQuotedLiteralExpression = _module.DoubleQuotedLiteralExpression
+SingleQuotedLiteralExpression = _module.SingleQuotedLiteralExpression
+NegativeLookaheadExpression = _module.NegativeLookaheadExpression
+OneOrMoreExpression = _module.OneOrMoreExpression
+OptionalExpression = _module.OptionalExpression
+PositiveLookaheadExpression = _module.PositiveLookaheadExpression
+PrioritizedChoiceExpression = _module.PrioritizedChoiceExpression
+RuleReference = _module.RuleReference
+SequenceExpression = _module.SequenceExpression
+ZeroOrMoreExpression = _module.ZeroOrMoreExpression
+
+assert (
+    len(
+        missing_classes := [
+            cls.__name__
+            for cls in to_package_non_abstract_subclasses(Expression)  # type: ignore[type-abstract]
+            if cls is not globals().get(cls.__name__)
+        ]
+    )
+    == 0
+), missing_classes
 
 # expression builders
 ExpressionBuilder = _module.ExpressionBuilder

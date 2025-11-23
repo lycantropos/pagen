@@ -18,7 +18,22 @@ from .expression_builders import (
     SingleQuotedLiteralExpressionBuilder as SingleQuotedLiteralExpressionBuilder,  # noqa: E501
     ZeroOrMoreExpressionBuilder as ZeroOrMoreExpressionBuilder,
 )
-from .expressions import Expression as Expression
+from .expressions import (
+    AnyCharacterExpression as AnyCharacterExpression,
+    CharacterClassExpression as CharacterClassExpression,
+    ComplementedCharacterClassExpression as ComplementedCharacterClassExpression,  # noqa: E501
+    DoubleQuotedLiteralExpression as DoubleQuotedLiteralExpression,
+    Expression as Expression,
+    NegativeLookaheadExpression as NegativeLookaheadExpression,
+    OneOrMoreExpression as OneOrMoreExpression,
+    OptionalExpression as OptionalExpression,
+    PositiveLookaheadExpression as PositiveLookaheadExpression,
+    PrioritizedChoiceExpression as PrioritizedChoiceExpression,
+    RuleReference as RuleReference,
+    SequenceExpression as SequenceExpression,
+    SingleQuotedLiteralExpression as SingleQuotedLiteralExpression,
+    ZeroOrMoreExpression as ZeroOrMoreExpression,
+)
 from .grammar import Grammar as Grammar
 from .grammar_builder import GrammarBuilder as GrammarBuilder
 from .match import (
