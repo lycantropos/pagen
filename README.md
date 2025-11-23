@@ -45,10 +45,10 @@ python -m pip install -e '.'
 ## Usage
 
 Let's parse PEG's own grammar
-described in [its paper by Bryan Ford](https://bford.info/pub/lang/peg.pdf):
+from [Bryan Ford's original paper](https://bford.info/pub/lang/peg.pdf)
 
 ```python
->>> from pagen.parsing import parse_grammar, is_mismatch
+>>> from pagen.parsing import is_mismatch, parse_grammar
 >>> peg_grammar_string = """\
 ... # Hierarchical syntax
 ... Grammar <- Spacing Definition+ EndOfFile
