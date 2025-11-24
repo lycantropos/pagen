@@ -23,7 +23,7 @@ repos:
     hooks:
       - id: typos
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.8
+    rev: v1.7.9
     hooks:
       - id: actionlint
   - repo: https://github.com/igorshubovych/markdownlint-cli
@@ -62,7 +62,7 @@ repos:
         pass_filenames: false
         types: [ rust ]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.5
+    rev: v0.14.6
     hooks:
       - id: ruff-format
       - id: ruff-check
