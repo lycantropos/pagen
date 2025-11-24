@@ -385,7 +385,7 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch]):
         return f'!{self._expression.to_nested_str()}'
 
 
-class OneOrMoreExpression(Expression[MatchLeaf | MatchTree]):
+class OneOrMoreExpression(Expression[MatchTree]):
     __slots__ = ('_expression',)
 
     def __new__(cls, expression: Expression[MatchLeaf | MatchTree], /) -> Self:
@@ -414,7 +414,7 @@ class OneOrMoreExpression(Expression[MatchLeaf | MatchTree]):
         *,
         cache: dict[str, dict[int, AnyMatch | Mismatch]],
         rule_name: str | None,
-    ) -> MatchLeaf | MatchTree | Mismatch:
+    ) -> MatchTree | Mismatch:
         children: list[MatchLeaf | MatchTree] = []
         expression = self._expression
         while not is_mismatch(
@@ -430,8 +430,7 @@ class OneOrMoreExpression(Expression[MatchLeaf | MatchTree]):
         return MatchTree(rule_name, children=children)
 
     @override
-    def to_match_classes(self, /) -> Iterable[type[MatchLeaf | MatchTree]]:
-        yield MatchLeaf
+    def to_match_classes(self, /) -> Iterable[type[MatchTree]]:
         yield MatchTree
 
     @override
@@ -479,10 +478,15 @@ class OptionalExpression(Expression[AnyMatch]):
         cache: dict[str, dict[int, AnyMatch | Mismatch]],
         rule_name: str | None,
     ) -> AnyMatch | Mismatch:
-        result = self._expression.evaluate(
-            text, index, cache=cache, rule_name=rule_name
+        return (
+            result
+            if not is_mismatch(
+                result := self._expression.evaluate(
+                    text, index, cache=cache, rule_name=rule_name
+                )
+            )
+            else LookaheadMatch(rule_name)
         )
-        return LookaheadMatch(rule_name) if is_mismatch(result) else result
 
     @override
     def to_match_classes(self, /) -> Iterable[type[AnyMatch]]:
@@ -731,7 +735,7 @@ class RuleReference(Expression[MatchT_co]):
         return self._name
 
 
-class SequenceExpression(Expression[MatchLeaf | MatchTree]):
+class SequenceExpression(Expression[MatchTree]):
     __slots__ = ('_elements',)
 
     def __new__(cls, elements: Sequence[Expression[AnyMatch]], /) -> Self:
@@ -772,7 +776,7 @@ class SequenceExpression(Expression[MatchLeaf | MatchTree]):
         *,
         cache: dict[str, dict[int, AnyMatch | Mismatch]],
         rule_name: str | None,
-    ) -> MatchLeaf | MatchTree | Mismatch:
+    ) -> MatchTree | Mismatch:
         non_lookahead_matches: list[MatchLeaf | MatchTree] = []
         for element in self._elements:
             if not is_mismatch(
@@ -793,8 +797,7 @@ class SequenceExpression(Expression[MatchLeaf | MatchTree]):
         return MatchTree(rule_name, children=non_lookahead_matches)
 
     @override
-    def to_match_classes(self, /) -> Iterable[type[MatchLeaf | MatchTree]]:
-        yield MatchLeaf
+    def to_match_classes(self, /) -> Iterable[type[MatchTree]]:
         yield MatchTree
 
     @override
@@ -921,14 +924,19 @@ def _escape_single_quoted_literal_characters(
 
 
 def _is_progressing_expression(
-    expression: Expression[Any], /
+    value: Expression[Any], /
 ) -> TypeIs[Expression[MatchLeaf | MatchTree]]:
     return not any(
         issubclass(match_cls, LookaheadMatch)
-        for match_cls in expression.to_match_classes()
+        for match_cls in value.to_match_classes()
     )
 
 
-def _validate_progressing_expression(expression: Expression[Any], /) -> None:
-    if not _is_progressing_expression(expression):
-        raise ValueError(expression)
+def _validate_progressing_expression(value: Expression[Any], /) -> None:
+    if not _is_progressing_expression(value):
+        raise ValueError(value)
+
+
+def _validate_repetition_value(value: Any, /) -> None:
+    if not isinstance(value, int):
+        raise TypeError(type(value))

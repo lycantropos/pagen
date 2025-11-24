@@ -334,8 +334,9 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch]):
         self, /, *, visited_rule_names: set[str]
     ) -> Iterable[type[AnyMatch]]:
         yield LookaheadMatch
-        yield MatchLeaf
-        yield MatchTree
+        yield from self._expression_builder.to_match_classes(
+            visited_rule_names=visited_rule_names
+        )
 
     @override
     def __repr__(self, /) -> str:

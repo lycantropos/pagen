@@ -50,7 +50,6 @@ from .expressions import (
 from .grammar import Grammar
 from .grammar_builder import GrammarBuilder
 from .match import AnyMatch, MatchLeaf, MatchTree
-from .mismatch import is_mismatch
 from .rule import Rule
 
 
@@ -620,10 +619,7 @@ assert (
 def parse_grammar(
     text: str, /, *, parser_grammar: Grammar = PARSER_GRAMMAR
 ) -> Grammar:
-    tree = parser_grammar.rules['Grammar'].parse(
-        text, 0, cache={}, rule_name=None
-    )
-    assert not is_mismatch(tree), text
+    tree = parser_grammar.parse(text, starting_rule_name='Grammar')
     grammar_builder = GrammarBuilder()
     TreeToGrammarVisitor(grammar_builder).visit(tree)
     return grammar_builder.build()
@@ -637,7 +633,7 @@ def _match_to_str(value: MatchLeaf | MatchTree, /) -> str:
 
 
 class MatchTreeVisitor:
-    def visit(self, match: AnyMatch) -> None:
+    def visit(self, match: AnyMatch, /) -> None:
         (
             self.generic_visit
             if (rule_name := match.rule_name) is None
