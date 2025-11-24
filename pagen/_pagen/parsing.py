@@ -182,8 +182,8 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
                     CharacterClassExpressionBuilder(
                         [
                             CharacterSet(
-                                f'{CHARACTER_CLASS_SPECIAL_CHARACTERS}'
-                                f'{COMMON_SPECIAL_CHARACTERS}'
+                                CHARACTER_CLASS_SPECIAL_CHARACTERS
+                                + COMMON_SPECIAL_CHARACTERS
                             )
                         ]
                     ),
@@ -210,8 +210,8 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
                     CharacterClassExpressionBuilder(
                         [
                             CharacterSet(
-                                f'{DOUBLE_QUOTED_LITERAL_SPECIAL_CHARACTERS}'
-                                f'{COMMON_SPECIAL_CHARACTERS}'
+                                DOUBLE_QUOTED_LITERAL_SPECIAL_CHARACTERS
+                                + COMMON_SPECIAL_CHARACTERS
                             )
                         ]
                     ),
@@ -238,8 +238,8 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
                     CharacterClassExpressionBuilder(
                         [
                             CharacterSet(
-                                f'{SINGLE_QUOTED_LITERAL_SPECIAL_CHARACTERS}'
-                                f'{COMMON_SPECIAL_CHARACTERS}'
+                                SINGLE_QUOTED_LITERAL_SPECIAL_CHARACTERS
+                                + COMMON_SPECIAL_CHARACTERS
                             )
                         ]
                     ),
