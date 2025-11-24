@@ -18,12 +18,8 @@ class Grammar(Generic[MatchT_co]):
         self._rules = rules
         return self
 
-    @property
-    def rules(self, /) -> Mapping[str, Rule[MatchT_co]]:
-        return self._rules
-
     def parse(self, value: str, /, *, starting_rule_name: str) -> MatchT_co:
-        result = self.rules[starting_rule_name].parse(
+        result = self._rules[starting_rule_name].parse(
             value, 0, cache={}, rule_name=None
         )
         if is_mismatch(result) or result.characters_count < len(value):

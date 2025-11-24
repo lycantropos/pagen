@@ -270,7 +270,7 @@ class NegativeLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
 
 
 @final
-class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchLeaf | MatchTree]):
+class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree]):
     __slots__ = ('_expression_builder',)
 
     def __new__(
@@ -296,8 +296,7 @@ class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchLeaf | MatchTree]):
     @override
     def _to_match_classes_impl(
         self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[MatchLeaf | MatchTree]]:
-        yield MatchLeaf
+    ) -> Iterable[type[MatchTree]]:
         yield MatchTree
 
     @override
@@ -529,7 +528,7 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co]):
 
 
 @final
-class SequenceExpressionBuilder(ExpressionBuilder[MatchLeaf | MatchTree]):
+class SequenceExpressionBuilder(ExpressionBuilder[MatchTree]):
     __slots__ = ('_element_builders',)
 
     def __new__(
@@ -571,8 +570,7 @@ class SequenceExpressionBuilder(ExpressionBuilder[MatchLeaf | MatchTree]):
     @override
     def _to_match_classes_impl(
         self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[MatchLeaf | MatchTree]]:
-        yield MatchLeaf
+    ) -> Iterable[type[MatchTree]]:
         yield MatchTree
 
     @override
@@ -581,7 +579,9 @@ class SequenceExpressionBuilder(ExpressionBuilder[MatchLeaf | MatchTree]):
 
 
 @final
-class ZeroOrMoreExpressionBuilder(ExpressionBuilder[AnyMatch]):
+class ZeroOrMoreExpressionBuilder(
+    ExpressionBuilder[LookaheadMatch | MatchTree]
+):
     __slots__ = ('_expression_builder',)
 
     def __new__(
@@ -609,9 +609,8 @@ class ZeroOrMoreExpressionBuilder(ExpressionBuilder[AnyMatch]):
     @override
     def _to_match_classes_impl(
         self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[AnyMatch]]:
+    ) -> Iterable[type[LookaheadMatch | MatchTree]]:
         yield LookaheadMatch
-        yield MatchLeaf
         yield MatchTree
 
     @override
