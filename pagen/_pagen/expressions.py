@@ -6,7 +6,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Generic, TypeGuard, final, overload
 
-from typing_extensions import Self, override
+from typing_extensions import Self, TypeIs, override
 
 from .character_containers import (
     CharacterRange,
@@ -330,10 +330,7 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch]):
     __slots__ = ('_expression',)
 
     def __new__(cls, expression: Expression[MatchLeaf | MatchTree], /) -> Self:
-        assert not any(
-            issubclass(match_cls, LookaheadMatch)
-            for match_cls in expression.to_match_classes()
-        ), expression
+        _validate_progressing_expression(expression)
         self = super().__new__(cls)
         self._expression = expression
         return self
@@ -392,6 +389,7 @@ class OneOrMoreExpression(Expression[MatchLeaf | MatchTree]):
     __slots__ = ('_expression',)
 
     def __new__(cls, expression: Expression[MatchLeaf | MatchTree], /) -> Self:
+        _validate_progressing_expression(expression)
         self = super().__new__(cls)
         self._expression = expression
         return self
@@ -455,6 +453,7 @@ class OptionalExpression(Expression[AnyMatch]):
     __slots__ = ('_expression',)
 
     def __new__(cls, expression: Expression[MatchLeaf | MatchTree], /) -> Self:
+        _validate_progressing_expression(expression)
         self = super().__new__(cls)
         self._expression = expression
         return self
@@ -509,10 +508,7 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch]):
     __slots__ = ('_expression',)
 
     def __new__(cls, expression: Expression[MatchLeaf | MatchTree], /) -> Self:
-        assert not any(
-            issubclass(match_cls, LookaheadMatch)
-            for match_cls in expression.to_match_classes()
-        ), expression
+        _validate_progressing_expression(expression)
         self = super().__new__(cls)
         self._expression = expression
         return self
@@ -739,14 +735,14 @@ class SequenceExpression(Expression[MatchLeaf | MatchTree]):
     __slots__ = ('_elements',)
 
     def __new__(cls, elements: Sequence[Expression[AnyMatch]], /) -> Self:
+        if not any(
+            _is_progressing_expression(element) for element in elements
+        ):
+            raise ValueError(elements)
         assert len(elements) > 1, elements
         self = super().__new__(cls)
         self._elements = elements
         return self
-
-    @property
-    def expressions(self, /) -> Sequence[Expression[AnyMatch]]:
-        return self._elements
 
     @override
     def equals_to(
@@ -824,6 +820,7 @@ class ZeroOrMoreExpression(Expression[LookaheadMatch | MatchTree]):
     __slots__ = ('_expression',)
 
     def __new__(cls, expression: Expression[MatchLeaf | MatchTree], /) -> Self:
+        _validate_progressing_expression(expression)
         self = super().__new__(cls)
         self._expression = expression
         return self
@@ -921,3 +918,17 @@ def _escape_single_quoted_literal_characters(
     assert isinstance(value, str), value
     assert len(value) > 0, value
     return value.translate(translation_table)
+
+
+def _is_progressing_expression(
+    expression: Expression[Any], /
+) -> TypeIs[Expression[MatchLeaf | MatchTree]]:
+    return not any(
+        issubclass(match_cls, LookaheadMatch)
+        for match_cls in expression.to_match_classes()
+    )
+
+
+def _validate_progressing_expression(expression: Expression[Any], /) -> None:
+    if not _is_progressing_expression(expression):
+        raise ValueError(expression)

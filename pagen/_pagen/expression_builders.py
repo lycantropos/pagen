@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Generic, final
 
-from typing_extensions import Self, override
+from typing_extensions import Self, TypeIs, override
 
 from . import CharacterRange, CharacterSet
 from .character_containers import merge_consecutive_character_sets
@@ -243,7 +243,7 @@ class NegativeLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
     ) -> NegativeLookaheadExpression:
-        _validate_non_lookahead_expression_builder(self._expression_builder)
+        _validate_progressing_expression_builder(self._expression_builder)
         return NegativeLookaheadExpression(
             self._expression_builder.build(rules=rules)
         )
@@ -284,7 +284,7 @@ class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchLeaf | MatchTree]):
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
     ) -> OneOrMoreExpression:
-        _validate_non_lookahead_expression_builder(self._expression_builder)
+        _validate_progressing_expression_builder(self._expression_builder)
         return OneOrMoreExpression(self._expression_builder.build(rules=rules))
 
     @override
@@ -320,7 +320,7 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch]):
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
     ) -> OptionalExpression:
-        _validate_non_lookahead_expression_builder(self._expression_builder)
+        _validate_progressing_expression_builder(self._expression_builder)
         return OptionalExpression(self._expression_builder.build(rules=rules))
 
     @override
@@ -357,7 +357,7 @@ class PositiveLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
     ) -> PositiveLookaheadExpression:
-        _validate_non_lookahead_expression_builder(self._expression_builder)
+        _validate_progressing_expression_builder(self._expression_builder)
         return PositiveLookaheadExpression(
             self._expression_builder.build(rules=rules)
         )
@@ -543,23 +543,11 @@ class SequenceExpressionBuilder(ExpressionBuilder[MatchLeaf | MatchTree]):
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
     ) -> SequenceExpression:
-        assert (
-            len(
-                [
-                    element_builder
-                    for element_builder in self._element_builders
-                    if not any(
-                        issubclass(element_match_cls, LookaheadMatch)
-                        for element_match_cls in (
-                            element_builder.to_match_classes(
-                                visited_rule_names=set()
-                            )
-                        )
-                    )
-                ]
-            )
-            > 0
-        )
+        if not any(
+            _is_progressing_expression_builder(element_builder)
+            for element_builder in self._element_builders
+        ):
+            raise ValueError(self._element_builders)
         return SequenceExpression(
             [
                 element_builder.build(rules=rules)
@@ -606,7 +594,7 @@ class ZeroOrMoreExpressionBuilder(ExpressionBuilder[AnyMatch]):
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
     ) -> ZeroOrMoreExpression:
-        _validate_non_lookahead_expression_builder(self._expression_builder)
+        _validate_progressing_expression_builder(self._expression_builder)
         return ZeroOrMoreExpression(
             self._expression_builder.build(rules=rules)
         )
@@ -630,21 +618,19 @@ class ZeroOrMoreExpressionBuilder(ExpressionBuilder[AnyMatch]):
         return f'{type(self).__qualname__}({self._expression_builder!r})'
 
 
-def _validate_non_lookahead_expression_builder(
+def _is_progressing_expression_builder(
+    expression_builder: ExpressionBuilder[Any], /
+) -> TypeIs[ExpressionBuilder[MatchLeaf | MatchTree]]:
+    return not any(
+        issubclass(match_cls, LookaheadMatch)
+        for match_cls in (
+            expression_builder.to_match_classes(visited_rule_names=set())
+        )
+    )
+
+
+def _validate_progressing_expression_builder(
     expression_builder: ExpressionBuilder[Any], /
 ) -> None:
-    if (
-        len(
-            invalid_match_classes := [
-                match_cls
-                for match_cls in (
-                    expression_builder.to_match_classes(
-                        visited_rule_names=set()
-                    )
-                )
-                if issubclass(match_cls, LookaheadMatch)
-            ]
-        )
-        > 0
-    ):
-        raise ValueError(invalid_match_classes)
+    if not _is_progressing_expression_builder(expression_builder):
+        raise ValueError(expression_builder)
