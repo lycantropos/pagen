@@ -80,6 +80,12 @@ class AnyCharacterExpressionBuilder(ExpressionBuilder[MatchLeaf]):
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return False
 
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {AnyCharacterExpressionBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
     @override
     def _to_match_classes_impl(
         self, /, *, visited_rule_names: set[str]
@@ -93,16 +99,6 @@ class AnyCharacterExpressionBuilder(ExpressionBuilder[MatchLeaf]):
 
 @final
 class CharacterClassExpressionBuilder(ExpressionBuilder[MatchLeaf]):
-    __slots__ = ('_elements',)
-
-    def __new__(
-        cls, elements: Sequence[CharacterRange | CharacterSet], /
-    ) -> Self:
-        assert len(elements) > 0, elements
-        self = super().__new__(cls)
-        self._elements = merge_consecutive_character_sets(elements)
-        return self
-
     @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
@@ -112,6 +108,22 @@ class CharacterClassExpressionBuilder(ExpressionBuilder[MatchLeaf]):
     @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return False
+
+    __slots__ = ('_elements',)
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {CharacterClassExpressionBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
+    def __new__(
+        cls, elements: Sequence[CharacterRange | CharacterSet], /
+    ) -> Self:
+        assert len(elements) > 0, elements
+        self = super().__new__(cls)
+        self._elements = merge_consecutive_character_sets(elements)
+        return self
 
     _elements: Sequence[CharacterRange | CharacterSet]
 
@@ -142,6 +154,13 @@ class ComplementedCharacterClassExpressionBuilder(
 
     __slots__ = ('_elements',)
 
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            'type '
+            f'{ComplementedCharacterClassExpressionBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
     def __new__(
         cls, elements: Sequence[CharacterRange | CharacterSet], /
     ) -> Self:
@@ -163,6 +182,7 @@ class ComplementedCharacterClassExpressionBuilder(
         return f'{type(self).__qualname__}({self._elements!r})'
 
 
+@final
 class ExactRepetitionExpressionBuilder(ExpressionBuilder[MatchTree]):
     @override
     def build(
@@ -178,6 +198,12 @@ class ExactRepetitionExpressionBuilder(ExpressionBuilder[MatchTree]):
         return self._expression_builder.is_left_recursive(visited_rule_names)
 
     __slots__ = '_count', '_expression_builder'
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {ExactRepetitionExpressionBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
 
     def __new__(
         cls,
@@ -235,6 +261,12 @@ class DoubleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
 
     __slots__ = ('_value',)
 
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {DoubleQuotedLiteralExpressionBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
     def __new__(cls, value: str, /) -> Self:
         assert len(value) > 0, value
         self = super().__new__(cls)
@@ -258,6 +290,12 @@ class SingleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
 
     __slots__ = ('_value',)
 
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {SingleQuotedLiteralExpressionBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
     def __new__(cls, value: str, /) -> Self:
         assert len(value) > 0, value
         self = super().__new__(cls)
@@ -273,16 +311,6 @@ class SingleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
 
 @final
 class NegativeLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
-    __slots__ = ('_expression_builder',)
-
-    def __new__(
-        cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
-    ) -> Self:
-        _validate_expression_builder(expression_builder)
-        self = super().__new__(cls)
-        self._expression_builder = expression_builder
-        return self
-
     @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
@@ -300,6 +328,22 @@ class NegativeLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_left_recursive(visited_rule_names)
 
+    __slots__ = ('_expression_builder',)
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {NegativeLookaheadExpressionBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
+    def __new__(
+        cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
+    ) -> Self:
+        _validate_expression_builder(expression_builder)
+        self = super().__new__(cls)
+        self._expression_builder = expression_builder
+        return self
+
     _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
 
     @override
@@ -315,16 +359,6 @@ class NegativeLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
 
 @final
 class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree]):
-    __slots__ = ('_expression_builder',)
-
-    def __new__(
-        cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
-    ) -> Self:
-        _validate_expression_builder(expression_builder)
-        self = super().__new__(cls)
-        self._expression_builder = expression_builder
-        return self
-
     @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
@@ -335,6 +369,22 @@ class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree]):
     @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_left_recursive(visited_rule_names)
+
+    __slots__ = ('_expression_builder',)
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {OneOrMoreExpressionBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
+    def __new__(
+        cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
+    ) -> Self:
+        _validate_expression_builder(expression_builder)
+        self = super().__new__(cls)
+        self._expression_builder = expression_builder
+        return self
 
     _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
 
@@ -351,16 +401,6 @@ class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree]):
 
 @final
 class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch]):
-    __slots__ = ('_expression_builder',)
-
-    def __new__(
-        cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
-    ) -> Self:
-        _validate_expression_builder(expression_builder)
-        self = super().__new__(cls)
-        self._expression_builder = expression_builder
-        return self
-
     @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
@@ -371,6 +411,22 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch]):
     @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_left_recursive(visited_rule_names)
+
+    __slots__ = ('_expression_builder',)
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {OptionalExpressionBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
+    def __new__(
+        cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
+    ) -> Self:
+        _validate_expression_builder(expression_builder)
+        self = super().__new__(cls)
+        self._expression_builder = expression_builder
+        return self
 
     _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
 
@@ -390,15 +446,6 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch]):
 
 @final
 class PositiveLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
-    __slots__ = ('_expression_builder',)
-
-    def __new__(
-        cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
-    ) -> Self:
-        self = super().__new__(cls)
-        self._expression_builder = expression_builder
-        return self
-
     @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
@@ -416,6 +463,21 @@ class PositiveLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_left_recursive(visited_rule_names)
 
+    __slots__ = ('_expression_builder',)
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {PositiveLookaheadExpressionBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
+    def __new__(
+        cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
+    ) -> Self:
+        self = super().__new__(cls)
+        self._expression_builder = expression_builder
+        return self
+
     _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
 
     @override
@@ -429,6 +491,7 @@ class PositiveLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
         return f'{type(self).__qualname__}({self._expression_builder!r})'
 
 
+@final
 class PositiveOrMoreExpressionBuilder(ExpressionBuilder[MatchTree]):
     @override
     def build(
@@ -444,6 +507,12 @@ class PositiveOrMoreExpressionBuilder(ExpressionBuilder[MatchTree]):
         return self._expression_builder.is_left_recursive(visited_rule_names)
 
     __slots__ = '_expression_builder', '_start'
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {PositiveOrMoreExpressionBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
 
     def __new__(
         cls,
@@ -477,6 +546,7 @@ class PositiveOrMoreExpressionBuilder(ExpressionBuilder[MatchTree]):
         return f'{type(self).__qualname__}({self._expression_builder!r})'
 
 
+@final
 class PositiveRepetitionRangeExpressionBuilder(ExpressionBuilder[MatchTree]):
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
@@ -490,6 +560,12 @@ class PositiveRepetitionRangeExpressionBuilder(ExpressionBuilder[MatchTree]):
         return self._expression_builder.is_left_recursive(visited_rule_names)
 
     __slots__ = '_end', '_expression_builder', '_start'
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {PositiveRepetitionRangeExpressionBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
 
     def __new__(
         cls,
@@ -557,6 +633,12 @@ class PrioritizedChoiceExpressionBuilder(ExpressionBuilder[MatchT_co]):
 
     __slots__ = ('_variant_builders',)
 
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {PrioritizedChoiceExpressionBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
     def __new__(
         cls, variant_builders: Sequence[ExpressionBuilder[MatchT_co]], /
     ) -> Self:
@@ -591,20 +673,6 @@ class PrioritizedChoiceExpressionBuilder(ExpressionBuilder[MatchT_co]):
 
 @final
 class RuleReferenceBuilder(ExpressionBuilder[MatchT_co]):
-    __slots__ = '_expression_builders', '_name'
-
-    def __new__(
-        cls,
-        name: str,
-        /,
-        *,
-        expression_builders: Mapping[str, ExpressionBuilder[MatchT_co]],
-    ) -> Self:
-        assert len(name) > 0, name
-        self = super().__new__(cls)
-        self._expression_builders, self._name = expression_builders, name
-        return self
-
     @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
@@ -650,6 +718,26 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co]):
         visited_rule_names.remove(self._name)
         return result
 
+    __slots__ = '_expression_builders', '_name'
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {RuleReferenceBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
+    def __new__(
+        cls,
+        name: str,
+        /,
+        *,
+        expression_builders: Mapping[str, ExpressionBuilder[MatchT_co]],
+    ) -> Self:
+        assert len(name) > 0, name
+        self = super().__new__(cls)
+        self._expression_builders, self._name = expression_builders, name
+        return self
+
     _expression_builders: Mapping[str, ExpressionBuilder[MatchT_co]]
     _name: str
 
@@ -677,16 +765,6 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co]):
 
 @final
 class SequenceExpressionBuilder(ExpressionBuilder[MatchTree]):
-    __slots__ = ('_element_builders',)
-
-    def __new__(
-        cls, element_builders: Sequence[ExpressionBuilder[AnyMatch]], /
-    ) -> Self:
-        assert len(element_builders) > 1, element_builders
-        self = super().__new__(cls)
-        self._element_builders = element_builders
-        return self
-
     @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
@@ -713,6 +791,22 @@ class SequenceExpressionBuilder(ExpressionBuilder[MatchTree]):
             return element_builder.is_left_recursive(visited_rule_names)
         raise ValueError('Sequence consists of non-left recursive lookaheads.')
 
+    __slots__ = ('_element_builders',)
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {SequenceExpressionBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
+    def __new__(
+        cls, element_builders: Sequence[ExpressionBuilder[AnyMatch]], /
+    ) -> Self:
+        assert len(element_builders) > 1, element_builders
+        self = super().__new__(cls)
+        self._element_builders = element_builders
+        return self
+
     _element_builders: Sequence[ExpressionBuilder[AnyMatch]]
 
     @override
@@ -730,16 +824,6 @@ class SequenceExpressionBuilder(ExpressionBuilder[MatchTree]):
 class ZeroOrMoreExpressionBuilder(
     ExpressionBuilder[LookaheadMatch | MatchTree]
 ):
-    __slots__ = ('_expression_builder',)
-
-    def __new__(
-        cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
-    ) -> Self:
-        _validate_expression_builder(expression_builder)
-        self = super().__new__(cls)
-        self._expression_builder = expression_builder
-        return self
-
     @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
@@ -752,6 +836,22 @@ class ZeroOrMoreExpressionBuilder(
     @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_left_recursive(visited_rule_names)
+
+    __slots__ = ('_expression_builder',)
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {ZeroOrMoreExpressionBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
+    def __new__(
+        cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
+    ) -> Self:
+        _validate_expression_builder(expression_builder)
+        self = super().__new__(cls)
+        self._expression_builder = expression_builder
+        return self
 
     _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
 
@@ -782,6 +882,12 @@ class ZeroRepetitionRangeExpressionBuilder(
         return self._expression_builder.is_left_recursive(visited_rule_names)
 
     __slots__ = '_end', '_expression_builder'
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {ZeroRepetitionRangeExpressionBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
 
     def __new__(
         cls,
