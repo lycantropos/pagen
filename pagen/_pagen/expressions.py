@@ -133,13 +133,21 @@ class AnyCharacterExpression(Expression[MatchLeaf]):
         return f'{type(self).__qualname__}()'
 
 
+@final
 class CharacterClassExpression(Expression[MatchLeaf]):
+    MIN_ELEMENTS_COUNT: ClassVar[int] = 1
+
     __slots__ = ('_elements',)
 
     def __new__(
         cls, elements: Sequence[CharacterRange | CharacterSet], /
     ) -> Self:
-        assert len(elements) > 0, elements
+        if len(elements) < cls.MIN_ELEMENTS_COUNT:
+            raise ValueError(
+                'Character class should have '
+                f'at least {cls.MIN_ELEMENTS_COUNT!r} elements, '
+                f'but got {elements!r}.'
+            )
         self = super().__new__(cls)
         self._elements = merge_consecutive_character_sets(elements)
         return self
@@ -189,6 +197,71 @@ class CharacterClassExpression(Expression[MatchLeaf]):
     @override
     def __str__(self, /) -> str:
         return f'[{"".join(map(str, self._elements))}]'
+
+
+class ComplementedCharacterClassExpression(Expression[MatchLeaf]):
+    MIN_ELEMENTS_COUNT: ClassVar[int] = 1
+
+    __slots__ = ('_elements',)
+
+    def __new__(
+        cls, elements: Sequence[CharacterRange | CharacterSet], /
+    ) -> Self:
+        if len(elements) < cls.MIN_ELEMENTS_COUNT:
+            raise ValueError(
+                'Complemented character class should have '
+                f'at least {cls.MIN_ELEMENTS_COUNT!r} elements, '
+                f'but got {elements!r}.'
+            )
+        self = super().__new__(cls)
+        self._elements = merge_consecutive_character_sets(elements)
+        return self
+
+    @override
+    def equals_to(
+        self, other: Expression[Any], /, *, visited_rule_names: set[str]
+    ) -> bool:
+        return (
+            isinstance(other, ComplementedCharacterClassExpression)
+            and self._elements == other._elements  # noqa: SLF001
+        )
+
+    @override
+    def evaluate(
+        self,
+        text: str,
+        index: int,
+        /,
+        *,
+        cache: dict[str, dict[int, AnyMatch | Mismatch]],
+        rule_name: str | None,
+    ) -> MatchLeaf | Mismatch:
+        if index >= len(text):
+            return Mismatch(rule_name, index)
+        character = text[index]
+        return (
+            MatchLeaf(rule_name, characters=character)
+            if all(character not in element for element in self._elements)
+            else Mismatch(rule_name, index)
+        )
+
+    @override
+    def to_match_classes(self, /) -> Iterable[type[MatchLeaf]]:
+        yield MatchLeaf
+
+    @override
+    def to_nested_str(self, /) -> str:
+        return self.__str__()
+
+    _elements: Sequence[CharacterRange | CharacterSet]
+
+    @override
+    def __repr__(self, /) -> str:
+        return f'{type(self).__qualname__}({self._elements!r})'
+
+    @override
+    def __str__(self, /) -> str:
+        return f'[^{"".join(map(str, self._elements))}]'
 
 
 class ExactRepetitionExpression(Expression[MatchTree]):
@@ -269,77 +342,24 @@ class ExactRepetitionExpression(Expression[MatchTree]):
         return f'{self._expression.to_nested_str()}{{{self._count}}}'
 
 
-class ComplementedCharacterClassExpression(Expression[MatchLeaf]):
-    __slots__ = ('_elements',)
-
-    def __new__(
-        cls, elements: Sequence[CharacterRange | CharacterSet], /
-    ) -> Self:
-        assert len(elements) > 0, elements
-        self = super().__new__(cls)
-        self._elements = merge_consecutive_character_sets(elements)
-        return self
-
-    @override
-    def equals_to(
-        self, other: Expression[Any], /, *, visited_rule_names: set[str]
-    ) -> bool:
-        return (
-            isinstance(other, ComplementedCharacterClassExpression)
-            and self._elements == other._elements  # noqa: SLF001
-        )
-
-    @override
-    def evaluate(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, AnyMatch | Mismatch]],
-        rule_name: str | None,
-    ) -> MatchLeaf | Mismatch:
-        if index >= len(text):
-            return Mismatch(rule_name, index)
-        character = text[index]
-        return (
-            MatchLeaf(rule_name, characters=character)
-            if all(character not in element for element in self._elements)
-            else Mismatch(rule_name, index)
-        )
-
-    @override
-    def to_match_classes(self, /) -> Iterable[type[MatchLeaf]]:
-        yield MatchLeaf
-
-    @override
-    def to_nested_str(self, /) -> str:
-        return self.__str__()
-
-    _elements: Sequence[CharacterRange | CharacterSet]
-
-    @override
-    def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self._elements!r})'
-
-    @override
-    def __str__(self, /) -> str:
-        return f'[^{"".join(map(str, self._elements))}]'
-
-
 class LiteralExpression(Expression[MatchLeaf]):
+    MIN_CHARACTERS_COUNT: ClassVar[int] = 1
+
     __slots__ = ()
 
     @property
     @abstractmethod
-    def value(self, /) -> str:
+    def characters(self, /) -> str:
         pass
 
     @override
     def equals_to(
         self, other: Expression[Any], /, *, visited_rule_names: set[str]
     ) -> bool:
-        return isinstance(other, type(self)) and self.value == other.value
+        return (
+            isinstance(other, type(self))
+            and self.characters == other.characters
+        )
 
     @override
     def evaluate(
@@ -352,8 +372,8 @@ class LiteralExpression(Expression[MatchLeaf]):
         rule_name: str | None,
     ) -> MatchLeaf | Mismatch:
         return (
-            MatchLeaf(rule_name, characters=self.value)
-            if text[index : index + len(self.value)] == self.value
+            MatchLeaf(rule_name, characters=self.characters)
+            if text[index : index + len(self.characters)] == self.characters
             else Mismatch(rule_name, index)
         )
 
@@ -365,51 +385,64 @@ class LiteralExpression(Expression[MatchLeaf]):
     def to_nested_str(self, /) -> str:
         return self.__str__()
 
+    @classmethod
+    def _validate_characters(cls, value: str, /) -> None:
+        if not isinstance(value, str):
+            raise TypeError(type(value))
+        if len(value) < cls.MIN_CHARACTERS_COUNT:
+            raise ValueError(
+                'Literal should have '
+                f'at least {cls.MIN_CHARACTERS_COUNT} characters, '
+                f'but got {value!r}.'
+            )
+
     @override
     def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self.value!r})'
+        return f'{type(self).__qualname__}({self.characters!r})'
 
 
 class DoubleQuotedLiteralExpression(LiteralExpression):
-    __slots__ = ('_value',)
+    __slots__ = ('_characters',)
 
-    def __new__(cls, value: str, /) -> Self:
-        assert isinstance(value, str)
-        assert len(value) > 0, value
+    def __new__(cls, characters: str, /) -> Self:
+        cls._validate_characters(characters)
         self = super().__new__(cls)
-        self._value = value
+        self._characters = characters
         return self
 
     @property
-    def value(self, /) -> str:
-        return self._value
+    def characters(self, /) -> str:
+        return self._characters
 
-    _value: str
+    _characters: str
 
     @override
     def __str__(self, /) -> str:
-        return f'"{_escape_double_quoted_literal_characters(self._value)}"'
+        return (
+            f'"{_escape_double_quoted_literal_characters(self._characters)}"'
+        )
 
 
 class SingleQuotedLiteralExpression(LiteralExpression):
-    __slots__ = ('_value',)
+    __slots__ = ('_characters',)
 
-    def __new__(cls, value: str, /) -> Self:
-        assert isinstance(value, str)
-        assert len(value) > 0, value
+    def __new__(cls, characters: str, /) -> Self:
+        cls._validate_characters(characters)
         self = super().__new__(cls)
-        self._value = value
+        self._characters = characters
         return self
 
     @property
-    def value(self, /) -> str:
-        return self._value
+    def characters(self, /) -> str:
+        return self._characters
 
-    _value: str
+    _characters: str
 
     @override
     def __str__(self, /) -> str:
-        return f"'{_escape_single_quoted_literal_characters(self._value)}'"
+        return (
+            f"'{_escape_single_quoted_literal_characters(self._characters)}'"
+        )
 
 
 class NegativeLookaheadExpression(Expression[LookaheadMatch]):
