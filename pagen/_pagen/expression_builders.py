@@ -13,16 +13,20 @@ from .expressions import (
     CharacterClassExpression,
     ComplementedCharacterClassExpression,
     DoubleQuotedLiteralExpression,
+    ExactRepetitionExpression,
     Expression,
     NegativeLookaheadExpression,
     OneOrMoreExpression,
     OptionalExpression,
     PositiveLookaheadExpression,
+    PositiveOrMoreExpression,
+    PositiveRepetitionRangeExpression,
     PrioritizedChoiceExpression,
     RuleReference,
     SequenceExpression,
     SingleQuotedLiteralExpression,
     ZeroOrMoreExpression,
+    ZeroRepetitionRangeExpression,
 )
 from .match import AnyMatch, LookaheadMatch, MatchLeaf, MatchT_co, MatchTree
 from .rule import Rule
@@ -126,16 +130,6 @@ class CharacterClassExpressionBuilder(ExpressionBuilder[MatchLeaf]):
 class ComplementedCharacterClassExpressionBuilder(
     ExpressionBuilder[MatchLeaf]
 ):
-    __slots__ = ('_elements',)
-
-    def __new__(
-        cls, elements: Sequence[CharacterRange | CharacterSet], /
-    ) -> Self:
-        assert len(elements) > 0, elements
-        self = super().__new__(cls)
-        self._elements = merge_consecutive_character_sets(elements)
-        return self
-
     @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
@@ -145,6 +139,16 @@ class ComplementedCharacterClassExpressionBuilder(
     @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return False
+
+    __slots__ = ('_elements',)
+
+    def __new__(
+        cls, elements: Sequence[CharacterRange | CharacterSet], /
+    ) -> Self:
+        assert len(elements) > 0, elements
+        self = super().__new__(cls)
+        self._elements = merge_consecutive_character_sets(elements)
+        return self
 
     _elements: Sequence[CharacterRange | CharacterSet]
 
@@ -159,12 +163,55 @@ class ComplementedCharacterClassExpressionBuilder(
         return f'{type(self).__qualname__}({self._elements!r})'
 
 
-class LiteralExpressionBuilder(ExpressionBuilder[MatchLeaf]):
-    @property
-    @abstractmethod
-    def value(self, /) -> str:
-        raise NotImplementedError
+class ExactRepetitionExpressionBuilder(ExpressionBuilder[MatchTree]):
+    @override
+    def build(
+        self, /, *, rules: Mapping[str, Rule[Any]]
+    ) -> ExactRepetitionExpression:
+        _check_that_expression_builder_is_progressing(self._expression_builder)
+        return ExactRepetitionExpression(
+            self._expression_builder.build(rules=rules), self._count
+        )
 
+    @override
+    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.is_left_recursive(visited_rule_names)
+
+    __slots__ = '_count', '_expression_builder'
+
+    def __new__(
+        cls,
+        expression_builder: ExpressionBuilder[MatchLeaf | MatchTree],
+        count: int,
+        /,
+    ) -> Self:
+        _validate_repetition_expression_builder_bound(count)
+        _validate_expression_builder(expression_builder)
+        if count < ExactRepetitionExpression.MIN_COUNT:
+            raise ValueError(
+                'Repetition count should not be '
+                f'less than {ExactRepetitionExpression.MIN_COUNT!r}, '
+                f'but got {count!r}.'
+            )
+        self = super().__new__(cls)
+        self._count, self._expression_builder = count, expression_builder
+        return self
+
+    @override
+    def _to_match_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MatchTree]]:
+        yield MatchTree
+
+    _count: int
+    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
+
+    @override
+    def __repr__(self, /) -> str:
+        return f'{type(self).__qualname__}({self._expression_builder!r})'
+
+
+class LiteralExpressionBuilder(ExpressionBuilder[MatchLeaf]):
     @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return False
@@ -175,37 +222,17 @@ class LiteralExpressionBuilder(ExpressionBuilder[MatchLeaf]):
     ) -> Iterable[type[MatchLeaf]]:
         yield MatchLeaf
 
-    @override
-    def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self.value!r})'
+    __slots__ = ()
 
 
 @final
 class DoubleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
-    __slots__ = ('_value',)
-
-    def __new__(cls, value: str, /) -> Self:
-        assert len(value) > 0, value
-        self = super().__new__(cls)
-        self._value = value
-        return self
-
     @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
     ) -> DoubleQuotedLiteralExpression:
         return DoubleQuotedLiteralExpression(self._value)
 
-    @property
-    @override
-    def value(self, /) -> str:
-        return self._value
-
-    _value: str
-
-
-@final
-class SingleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
     __slots__ = ('_value',)
 
     def __new__(cls, value: str, /) -> Self:
@@ -214,18 +241,34 @@ class SingleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
         self._value = value
         return self
 
+    _value: str
+
+    @override
+    def __repr__(self, /) -> str:
+        return f'{type(self).__qualname__}({self._value!r})'
+
+
+@final
+class SingleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
     @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
     ) -> SingleQuotedLiteralExpression:
         return SingleQuotedLiteralExpression(self._value)
 
-    @property
-    @override
-    def value(self, /) -> str:
-        return self._value
+    __slots__ = ('_value',)
+
+    def __new__(cls, value: str, /) -> Self:
+        assert len(value) > 0, value
+        self = super().__new__(cls)
+        self._value = value
+        return self
 
     _value: str
+
+    @override
+    def __repr__(self, /) -> str:
+        return f'{type(self).__qualname__}({self._value!r})'
 
 
 @final
@@ -235,6 +278,7 @@ class NegativeLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
     def __new__(
         cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
     ) -> Self:
+        _validate_expression_builder(expression_builder)
         self = super().__new__(cls)
         self._expression_builder = expression_builder
         return self
@@ -243,7 +287,7 @@ class NegativeLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
     ) -> NegativeLookaheadExpression:
-        _validate_progressing_expression_builder(self._expression_builder)
+        _check_that_expression_builder_is_progressing(self._expression_builder)
         return NegativeLookaheadExpression(
             self._expression_builder.build(rules=rules)
         )
@@ -276,6 +320,7 @@ class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree]):
     def __new__(
         cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
     ) -> Self:
+        _validate_expression_builder(expression_builder)
         self = super().__new__(cls)
         self._expression_builder = expression_builder
         return self
@@ -284,7 +329,7 @@ class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree]):
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
     ) -> OneOrMoreExpression:
-        _validate_progressing_expression_builder(self._expression_builder)
+        _check_that_expression_builder_is_progressing(self._expression_builder)
         return OneOrMoreExpression(self._expression_builder.build(rules=rules))
 
     @override
@@ -311,6 +356,7 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch]):
     def __new__(
         cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
     ) -> Self:
+        _validate_expression_builder(expression_builder)
         self = super().__new__(cls)
         self._expression_builder = expression_builder
         return self
@@ -319,7 +365,7 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch]):
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
     ) -> OptionalExpression:
-        _validate_progressing_expression_builder(self._expression_builder)
+        _check_that_expression_builder_is_progressing(self._expression_builder)
         return OptionalExpression(self._expression_builder.build(rules=rules))
 
     @override
@@ -357,7 +403,7 @@ class PositiveLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
     ) -> PositiveLookaheadExpression:
-        _validate_progressing_expression_builder(self._expression_builder)
+        _check_that_expression_builder_is_progressing(self._expression_builder)
         return PositiveLookaheadExpression(
             self._expression_builder.build(rules=rules)
         )
@@ -383,30 +429,114 @@ class PositiveLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
         return f'{type(self).__qualname__}({self._expression_builder!r})'
 
 
-@final
-class PrioritizedChoiceExpressionBuilder(ExpressionBuilder[MatchT_co]):
-    __slots__ = ('_variant_builders',)
+class PositiveOrMoreExpressionBuilder(ExpressionBuilder[MatchTree]):
+    @override
+    def build(
+        self, /, *, rules: Mapping[str, Rule[Any]]
+    ) -> PositiveOrMoreExpression:
+        _check_that_expression_builder_is_progressing(self._expression_builder)
+        return PositiveOrMoreExpression(
+            self._expression_builder.build(rules=rules), self._start
+        )
+
+    @override
+    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.is_left_recursive(visited_rule_names)
+
+    __slots__ = '_expression_builder', '_start'
 
     def __new__(
-        cls, variant_builders: Sequence[ExpressionBuilder[MatchT_co]], /
+        cls,
+        expression_builder: ExpressionBuilder[MatchLeaf | MatchTree],
+        start: int,
+        /,
     ) -> Self:
-        assert len(variant_builders) > 1, variant_builders
-        flattened_variant_builders: list[ExpressionBuilder[MatchT_co]] = []
-        for variant_builder in variant_builders:
-            if isinstance(variant_builder, PrioritizedChoiceExpressionBuilder):
-                flattened_variant_builders.extend(
-                    variant_builder._variant_builders  # noqa: SLF001
-                )
-            else:
-                flattened_variant_builders.append(variant_builder)
+        _validate_repetition_expression_builder_bound(start)
+        _validate_expression_builder(expression_builder)
+        if start < PositiveOrMoreExpression.MIN_START:
+            raise ValueError(
+                'Repetition start should not be '
+                f'less than {PositiveOrMoreExpression.MIN_START!r}, '
+                f'but got {start!r}.'
+            )
         self = super().__new__(cls)
-        self._variant_builders = flattened_variant_builders
+        self._expression_builder, self._start = expression_builder, start
         return self
 
-    @property
-    def variants(self, /) -> Sequence[ExpressionBuilder[MatchT_co]]:
-        return self._variant_builders
+    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
+    _start: int
 
+    @override
+    def _to_match_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MatchTree]]:
+        yield MatchTree
+
+    @override
+    def __repr__(self, /) -> str:
+        return f'{type(self).__qualname__}({self._expression_builder!r})'
+
+
+class PositiveRepetitionRangeExpressionBuilder(ExpressionBuilder[MatchTree]):
+    def build(
+        self, /, *, rules: Mapping[str, Rule[Any]]
+    ) -> PositiveRepetitionRangeExpression:
+        _check_that_expression_builder_is_progressing(self._expression_builder)
+        return PositiveRepetitionRangeExpression(
+            self._expression_builder.build(rules=rules), self._start, self._end
+        )
+
+    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.is_left_recursive(visited_rule_names)
+
+    __slots__ = '_end', '_expression_builder', '_start'
+
+    def __new__(
+        cls,
+        expression_builder: ExpressionBuilder[MatchLeaf | MatchTree],
+        start: int,
+        end: int,
+        /,
+    ) -> Self:
+        _validate_repetition_expression_builder_bound(start)
+        _validate_repetition_expression_builder_bound(end)
+        _validate_expression_builder(expression_builder)
+        if start < PositiveRepetitionRangeExpression.MIN_START:
+            raise ValueError(
+                'Repetition range start should not be '
+                f'less than {PositiveRepetitionRangeExpression.MIN_START!r}, '
+                f'but got {start!r}.'
+            )
+        if start >= end:
+            raise ValueError(
+                'Repetition range start should be less than end, '
+                f'but got {start!r} >= {end!r}.'
+            )
+        self = super().__new__(cls)
+        self._expression_builder, self._end, self._start = (
+            expression_builder,
+            end,
+            start,
+        )
+        return self
+
+    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
+    _end: int
+    _start: int
+
+    @override
+    def _to_match_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MatchTree]]:
+        yield MatchTree
+
+    @override
+    def __repr__(self, /) -> str:
+        return f'{type(self).__qualname__}({self._expression_builder!r})'
+
+
+@final
+class PrioritizedChoiceExpressionBuilder(ExpressionBuilder[MatchT_co]):
     @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
@@ -424,6 +554,24 @@ class PrioritizedChoiceExpressionBuilder(ExpressionBuilder[MatchT_co]):
             variant_builder.is_left_recursive(visited_rule_names)
             for variant_builder in self._variant_builders
         )
+
+    __slots__ = ('_variant_builders',)
+
+    def __new__(
+        cls, variant_builders: Sequence[ExpressionBuilder[MatchT_co]], /
+    ) -> Self:
+        assert len(variant_builders) > 1, variant_builders
+        flattened_variant_builders: list[ExpressionBuilder[MatchT_co]] = []
+        for variant_builder in variant_builders:
+            if isinstance(variant_builder, PrioritizedChoiceExpressionBuilder):
+                flattened_variant_builders.extend(
+                    variant_builder._variant_builders  # noqa: SLF001
+                )
+            else:
+                flattened_variant_builders.append(variant_builder)
+        self = super().__new__(cls)
+        self._variant_builders = flattened_variant_builders
+        return self
 
     _variant_builders: Sequence[ExpressionBuilder[MatchT_co]]
 
@@ -587,6 +735,7 @@ class ZeroOrMoreExpressionBuilder(
     def __new__(
         cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
     ) -> Self:
+        _validate_expression_builder(expression_builder)
         self = super().__new__(cls)
         self._expression_builder = expression_builder
         return self
@@ -595,7 +744,7 @@ class ZeroOrMoreExpressionBuilder(
     def build(
         self, /, *, rules: Mapping[str, Rule[Any]]
     ) -> ZeroOrMoreExpression:
-        _validate_progressing_expression_builder(self._expression_builder)
+        _check_that_expression_builder_is_progressing(self._expression_builder)
         return ZeroOrMoreExpression(
             self._expression_builder.build(rules=rules)
         )
@@ -618,6 +767,62 @@ class ZeroOrMoreExpressionBuilder(
         return f'{type(self).__qualname__}({self._expression_builder!r})'
 
 
+class ZeroRepetitionRangeExpressionBuilder(
+    ExpressionBuilder[LookaheadMatch | MatchTree]
+):
+    def build(
+        self, /, *, rules: Mapping[str, Rule[Any]]
+    ) -> ZeroRepetitionRangeExpression:
+        _check_that_expression_builder_is_progressing(self._expression_builder)
+        return ZeroRepetitionRangeExpression(
+            self._expression_builder.build(rules=rules), self._end
+        )
+
+    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.is_left_recursive(visited_rule_names)
+
+    __slots__ = '_end', '_expression_builder'
+
+    def __new__(
+        cls,
+        expression_builder: ExpressionBuilder[MatchLeaf | MatchTree],
+        end: int,
+        /,
+    ) -> Self:
+        _validate_repetition_expression_builder_bound(end)
+        _validate_expression_builder(expression_builder)
+        if end < ZeroRepetitionRangeExpression.MIN_END:
+            raise ValueError(
+                'Repetition range end should not be '
+                f'less than {ZeroRepetitionRangeExpression.MIN_END!r}, '
+                f'but got {end!r}.'
+            )
+        self = super().__new__(cls)
+        self._end, self._expression_builder = end, expression_builder
+        return self
+
+    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
+    _end: int
+
+    @override
+    def _to_match_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[LookaheadMatch | MatchTree]]:
+        yield LookaheadMatch
+        yield MatchTree
+
+    @override
+    def __repr__(self, /) -> str:
+        return f'{type(self).__qualname__}({self._expression_builder!r})'
+
+
+def _check_that_expression_builder_is_progressing(
+    expression_builder: ExpressionBuilder[Any], /
+) -> None:
+    if not _is_progressing_expression_builder(expression_builder):
+        raise ValueError(expression_builder)
+
+
 def _is_progressing_expression_builder(
     expression_builder: ExpressionBuilder[Any], /
 ) -> TypeIs[ExpressionBuilder[MatchLeaf | MatchTree]]:
@@ -629,8 +834,11 @@ def _is_progressing_expression_builder(
     )
 
 
-def _validate_progressing_expression_builder(
-    expression_builder: ExpressionBuilder[Any], /
-) -> None:
-    if not _is_progressing_expression_builder(expression_builder):
-        raise ValueError(expression_builder)
+def _validate_expression_builder(value: Any, /) -> None:
+    if not isinstance(value, ExpressionBuilder):
+        raise TypeError(type(value))
+
+
+def _validate_repetition_expression_builder_bound(value: Any, /) -> None:
+    if not isinstance(value, int):
+        raise TypeError(type(value))

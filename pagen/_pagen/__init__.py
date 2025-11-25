@@ -7,32 +7,40 @@ from .expression_builders import (
     CharacterClassExpressionBuilder as CharacterClassExpressionBuilder,
     ComplementedCharacterClassExpressionBuilder as ComplementedCharacterClassExpressionBuilder,  # noqa: E501
     DoubleQuotedLiteralExpressionBuilder as DoubleQuotedLiteralExpressionBuilder,  # noqa: E501
+    ExactRepetitionExpressionBuilder as ExactRepetitionExpressionBuilder,
     ExpressionBuilder as ExpressionBuilder,
     NegativeLookaheadExpressionBuilder as NegativeLookaheadExpressionBuilder,
     OneOrMoreExpressionBuilder as OneOrMoreExpressionBuilder,
     OptionalExpressionBuilder as OptionalExpressionBuilder,
     PositiveLookaheadExpressionBuilder as PositiveLookaheadExpressionBuilder,
+    PositiveOrMoreExpressionBuilder as PositiveOrMoreExpressionBuilder,
+    PositiveRepetitionRangeExpressionBuilder as PositiveRepetitionRangeExpressionBuilder,  # noqa: E501
     PrioritizedChoiceExpressionBuilder as PrioritizedChoiceExpressionBuilder,
     RuleReferenceBuilder as RuleReferenceBuilder,
     SequenceExpressionBuilder as SequenceExpressionBuilder,
     SingleQuotedLiteralExpressionBuilder as SingleQuotedLiteralExpressionBuilder,  # noqa: E501
     ZeroOrMoreExpressionBuilder as ZeroOrMoreExpressionBuilder,
+    ZeroRepetitionRangeExpressionBuilder as ZeroRepetitionRangeExpressionBuilder,  # noqa: E501
 )
 from .expressions import (
     AnyCharacterExpression as AnyCharacterExpression,
     CharacterClassExpression as CharacterClassExpression,
     ComplementedCharacterClassExpression as ComplementedCharacterClassExpression,  # noqa: E501
     DoubleQuotedLiteralExpression as DoubleQuotedLiteralExpression,
+    ExactRepetitionExpression as ExactRepetitionExpression,
     Expression as Expression,
     NegativeLookaheadExpression as NegativeLookaheadExpression,
     OneOrMoreExpression as OneOrMoreExpression,
     OptionalExpression as OptionalExpression,
     PositiveLookaheadExpression as PositiveLookaheadExpression,
+    PositiveOrMoreExpression as PositiveOrMoreExpression,
+    PositiveRepetitionRangeExpression as PositiveRepetitionRangeExpression,
     PrioritizedChoiceExpression as PrioritizedChoiceExpression,
     RuleReference as RuleReference,
     SequenceExpression as SequenceExpression,
     SingleQuotedLiteralExpression as SingleQuotedLiteralExpression,
     ZeroOrMoreExpression as ZeroOrMoreExpression,
+    ZeroRepetitionRangeExpression as ZeroRepetitionRangeExpression,
 )
 from .grammar import Grammar as Grammar
 from .grammar_builder import GrammarBuilder as GrammarBuilder

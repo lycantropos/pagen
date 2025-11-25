@@ -29,10 +29,10 @@ class CharacterRange:
             raise TypeError(type(start))
         if not isinstance(end, str):
             raise TypeError(type(end))
-        if ord(start) > ord(end):
+        if ord(start) >= ord(end):
             raise ValueError(
-                'Range start should not be greater than end, '
-                f'but got {start!r} > {end!r}.'
+                'Range start should be less than end, '
+                f'but got {start!r} >= {end!r}.'
             )
         self = super().__new__(cls)
         self._end, self._start = end, start

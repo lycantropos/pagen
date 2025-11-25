@@ -4,7 +4,15 @@ from _operator import methodcaller
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Mapping, Sequence
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Generic, TypeGuard, final, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Generic,
+    TypeGuard,
+    final,
+    overload,
+)
 
 from typing_extensions import Self, TypeIs, override
 
@@ -183,6 +191,84 @@ class CharacterClassExpression(Expression[MatchLeaf]):
         return f'[{"".join(map(str, self._elements))}]'
 
 
+class ExactRepetitionExpression(Expression[MatchTree]):
+    MIN_COUNT: ClassVar[int] = 2
+
+    __slots__ = '_count', '_expression'
+
+    def __new__(
+        cls, expression: Expression[MatchLeaf | MatchTree], count: int, /
+    ) -> Self:
+        _validate_repetition_bound(count)
+        _validate_expression(expression)
+        _validate_progressing_expression(expression)
+        if count < cls.MIN_COUNT:
+            raise ValueError(
+                f'Repetition count should not be less than {cls.MIN_COUNT!r}, '
+                f'but got {count!r}.'
+            )
+        self = super().__new__(cls)
+        self._count, self._expression = count, expression
+        return self
+
+    @override
+    def equals_to(
+        self, other: Expression[Any], /, *, visited_rule_names: set[str]
+    ) -> bool:
+        return (
+            isinstance(other, ExactRepetitionExpression)
+            and self._count == other._count
+            and self._expression.equals_to(
+                other._expression, visited_rule_names=visited_rule_names
+            )
+        )
+
+    @override
+    def evaluate(
+        self,
+        text: str,
+        index: int,
+        /,
+        *,
+        cache: dict[str, dict[int, AnyMatch | Mismatch]],
+        rule_name: str | None,
+    ) -> MatchTree | Mismatch:
+        children: list[MatchLeaf | MatchTree] = []
+        expression = self._expression
+        start_index = index
+        for _ in range(self._count):
+            if not is_mismatch(
+                match := expression.evaluate(
+                    text, index, cache=cache, rule_name=None
+                )
+            ):
+                assert isinstance(match, MatchLeaf | MatchTree)
+                children.append(match)
+                index += match.characters_count
+            else:
+                return Mismatch(rule_name, start_index)
+        return MatchTree(rule_name, children=children)
+
+    @override
+    def to_match_classes(self, /) -> Iterable[type[MatchTree]]:
+        yield MatchTree
+
+    @override
+    def to_nested_str(self, /) -> str:
+        return f'({self.__str__()})'
+
+    _count: int
+    _expression: Expression[MatchLeaf | MatchTree]
+
+    @override
+    def __repr__(self, /) -> str:
+        return f'{type(self).__qualname__}({self._expression!r})'
+
+    @override
+    def __str__(self, /) -> str:
+        return f'{self._expression.to_nested_str()}{{{self._count}}}'
+
+
 class ComplementedCharacterClassExpression(Expression[MatchLeaf]):
     __slots__ = ('_elements',)
 
@@ -330,6 +416,7 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch]):
     __slots__ = ('_expression',)
 
     def __new__(cls, expression: Expression[MatchLeaf | MatchTree], /) -> Self:
+        _validate_expression(expression)
         _validate_progressing_expression(expression)
         self = super().__new__(cls)
         self._expression = expression
@@ -389,6 +476,7 @@ class OneOrMoreExpression(Expression[MatchTree]):
     __slots__ = ('_expression',)
 
     def __new__(cls, expression: Expression[MatchLeaf | MatchTree], /) -> Self:
+        _validate_expression(expression)
         _validate_progressing_expression(expression)
         self = super().__new__(cls)
         self._expression = expression
@@ -452,6 +540,7 @@ class OptionalExpression(Expression[AnyMatch]):
     __slots__ = ('_expression',)
 
     def __new__(cls, expression: Expression[MatchLeaf | MatchTree], /) -> Self:
+        _validate_expression(expression)
         _validate_progressing_expression(expression)
         self = super().__new__(cls)
         self._expression = expression
@@ -512,6 +601,7 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch]):
     __slots__ = ('_expression',)
 
     def __new__(cls, expression: Expression[MatchLeaf | MatchTree], /) -> Self:
+        _validate_expression(expression)
         _validate_progressing_expression(expression)
         self = super().__new__(cls)
         self._expression = expression
@@ -565,6 +655,196 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch]):
     @override
     def __str__(self, /) -> str:
         return f'&{self._expression.to_nested_str()}'
+
+
+class PositiveOrMoreExpression(Expression[MatchTree]):
+    MIN_START: ClassVar[int] = 2
+
+    __slots__ = '_expression', '_start'
+
+    def __new__(
+        cls, expression: Expression[MatchLeaf | MatchTree], start: int, /
+    ) -> Self:
+        _validate_repetition_bound(start)
+        _validate_expression(expression)
+        _validate_progressing_expression(expression)
+        if start < cls.MIN_START:
+            raise ValueError(
+                f'Repetition start should not be less than {cls.MIN_START!r}, '
+                f'but got {start!r}.'
+            )
+        self = super().__new__(cls)
+        self._expression, self._start = expression, start
+        return self
+
+    @override
+    def equals_to(
+        self, other: Expression[Any], /, *, visited_rule_names: set[str]
+    ) -> bool:
+        return (
+            isinstance(other, PositiveOrMoreExpression)
+            and self._start == other._start
+            and self._expression.equals_to(
+                other._expression, visited_rule_names=visited_rule_names
+            )
+        )
+
+    @override
+    def evaluate(
+        self,
+        text: str,
+        index: int,
+        /,
+        *,
+        cache: dict[str, dict[int, AnyMatch | Mismatch]],
+        rule_name: str | None,
+    ) -> MatchTree | Mismatch:
+        children: list[MatchLeaf | MatchTree] = []
+        expression = self._expression
+        start_index = index
+        for _ in range(self._start):
+            if not is_mismatch(
+                match := expression.evaluate(
+                    text, index, cache=cache, rule_name=None
+                )
+            ):
+                assert isinstance(match, MatchLeaf | MatchTree)
+                children.append(match)
+                index += match.characters_count
+            else:
+                return Mismatch(rule_name, start_index)
+        while not is_mismatch(
+            match := expression.evaluate(
+                text, index, cache=cache, rule_name=None
+            )
+        ):
+            assert isinstance(match, MatchLeaf | MatchTree)
+            children.append(match)
+            index += match.characters_count
+        return MatchTree(rule_name, children=children)
+
+    @override
+    def to_match_classes(self, /) -> Iterable[type[MatchTree]]:
+        yield MatchTree
+
+    @override
+    def to_nested_str(self, /) -> str:
+        return f'({self.__str__()})'
+
+    _expression: Expression[MatchLeaf | MatchTree]
+    _start: int
+
+    @override
+    def __repr__(self, /) -> str:
+        return f'{type(self).__qualname__}({self._expression!r})'
+
+    @override
+    def __str__(self, /) -> str:
+        return f'{self._expression.to_nested_str()}{{{self._start},}}'
+
+
+class PositiveRepetitionRangeExpression(Expression[MatchTree]):
+    MIN_START: ClassVar[int] = 1
+
+    __slots__ = '_end', '_expression', '_start'
+
+    def __new__(
+        cls,
+        expression: Expression[MatchLeaf | MatchTree],
+        start: int,
+        end: int,
+        /,
+    ) -> Self:
+        _validate_repetition_bound(start)
+        _validate_repetition_bound(end)
+        _validate_expression(expression)
+        _validate_progressing_expression(expression)
+        if start < cls.MIN_START:
+            raise ValueError(
+                'Repetition range start should not be less '
+                f'than {cls.MIN_START!r}, '
+                f'but got {start!r}.'
+            )
+        if start >= end:
+            raise ValueError(
+                'Repetition range start should be less than end, '
+                f'but got {start!r} >= {end!r}.'
+            )
+        self = super().__new__(cls)
+        self._expression, self._end, self._start = expression, end, start
+        return self
+
+    @override
+    def equals_to(
+        self, other: Expression[Any], /, *, visited_rule_names: set[str]
+    ) -> bool:
+        return (
+            isinstance(other, PositiveRepetitionRangeExpression)
+            and self._start == other._start
+            and self._end == other._end
+            and self._expression.equals_to(
+                other._expression, visited_rule_names=visited_rule_names
+            )
+        )
+
+    @override
+    def evaluate(
+        self,
+        text: str,
+        index: int,
+        /,
+        *,
+        cache: dict[str, dict[int, AnyMatch | Mismatch]],
+        rule_name: str | None,
+    ) -> MatchTree | Mismatch:
+        children: list[MatchLeaf | MatchTree] = []
+        expression = self._expression
+        start_index = index
+        for _ in range(self._start):
+            if not is_mismatch(
+                match := expression.evaluate(
+                    text, index, cache=cache, rule_name=None
+                )
+            ):
+                assert isinstance(match, MatchLeaf | MatchTree)
+                children.append(match)
+                index += match.characters_count
+            else:
+                return Mismatch(rule_name, start_index)
+        for _ in range(self._start, self._end):
+            if not is_mismatch(
+                match := expression.evaluate(
+                    text, index, cache=cache, rule_name=None
+                )
+            ):
+                assert isinstance(match, MatchLeaf | MatchTree)
+                children.append(match)
+                index += match.characters_count
+            else:
+                break
+        return MatchTree(rule_name, children=children)
+
+    @override
+    def to_match_classes(self, /) -> Iterable[type[MatchTree]]:
+        yield MatchTree
+
+    @override
+    def to_nested_str(self, /) -> str:
+        return f'({self.__str__()})'
+
+    _expression: Expression[MatchLeaf | MatchTree]
+    _end: int
+    _start: int
+
+    @override
+    def __repr__(self, /) -> str:
+        return f'{type(self).__qualname__}({self._expression!r})'
+
+    @override
+    def __str__(self, /) -> str:
+        return (
+            f'{self._expression.to_nested_str()}{{{self._start},{self._end}}}'
+        )
 
 
 class PrioritizedChoiceExpression(Expression[MatchT_co]):
@@ -823,6 +1103,7 @@ class ZeroOrMoreExpression(Expression[LookaheadMatch | MatchTree]):
     __slots__ = ('_expression',)
 
     def __new__(cls, expression: Expression[MatchLeaf | MatchTree], /) -> Self:
+        _validate_expression(expression)
         _validate_progressing_expression(expression)
         self = super().__new__(cls)
         self._expression = expression
@@ -885,6 +1166,91 @@ class ZeroOrMoreExpression(Expression[LookaheadMatch | MatchTree]):
         return f'{self._expression.to_nested_str()}*'
 
 
+class ZeroRepetitionRangeExpression(Expression[LookaheadMatch | MatchTree]):
+    MIN_END: ClassVar[int] = 2
+
+    __slots__ = '_end', '_expression'
+
+    def __new__(
+        cls, expression: Expression[MatchLeaf | MatchTree], end: int, /
+    ) -> Self:
+        _validate_repetition_bound(end)
+        _validate_expression(expression)
+        _validate_progressing_expression(expression)
+        if end < cls.MIN_END:
+            raise ValueError(
+                'Repetition range end '
+                f'should not be less than {cls.MIN_END!r}, '
+                f'but got {end!r}.'
+            )
+        self = super().__new__(cls)
+        self._end, self._expression = end, expression
+        return self
+
+    @override
+    def equals_to(
+        self, other: Expression[Any], /, *, visited_rule_names: set[str]
+    ) -> bool:
+        return (
+            isinstance(other, ZeroRepetitionRangeExpression)
+            and self._end == other._end
+            and self._expression.equals_to(
+                other._expression, visited_rule_names=visited_rule_names
+            )
+        )
+
+    @override
+    def evaluate(
+        self,
+        text: str,
+        index: int,
+        /,
+        *,
+        cache: dict[str, dict[int, AnyMatch | Mismatch]],
+        rule_name: str | None,
+    ) -> LookaheadMatch | MatchTree | Mismatch:
+        children: list[MatchLeaf | MatchTree] = []
+        expression = self._expression
+        for _ in range(self._end):
+            if not is_mismatch(
+                match := expression.evaluate(
+                    text, index, cache=cache, rule_name=None
+                )
+            ):
+                assert isinstance(match, MatchLeaf | MatchTree)
+                children.append(match)
+                index += match.characters_count
+            else:
+                break
+        return (
+            LookaheadMatch(rule_name)
+            if len(children) == 0
+            else MatchTree(rule_name, children=children)
+        )
+
+    @override
+    def to_match_classes(
+        self, /
+    ) -> Iterable[type[LookaheadMatch | MatchTree]]:
+        yield LookaheadMatch
+        yield MatchTree
+
+    @override
+    def to_nested_str(self, /) -> str:
+        return f'({self.__str__()})'
+
+    _end: int
+    _expression: Expression[MatchLeaf | MatchTree]
+
+    @override
+    def __repr__(self, /) -> str:
+        return f'{type(self).__qualname__}({self._expression!r})'
+
+    @override
+    def __str__(self, /) -> str:
+        return f'{self._expression.to_nested_str()}{{,{self._end}}}'
+
+
 def _escape_double_quoted_literal_characters(
     value: str,
     /,
@@ -932,11 +1298,16 @@ def _is_progressing_expression(
     )
 
 
+def _validate_expression(value: Any, /) -> None:
+    if not isinstance(value, Expression):
+        raise TypeError(type(value))
+
+
 def _validate_progressing_expression(value: Expression[Any], /) -> None:
     if not _is_progressing_expression(value):
         raise ValueError(value)
 
 
-def _validate_repetition_value(value: Any, /) -> None:
+def _validate_repetition_bound(value: Any, /) -> None:
     if not isinstance(value, int):
         raise TypeError(type(value))

@@ -3,7 +3,7 @@ from __future__ import annotations
 import contextlib
 from collections.abc import Iterator, Mapping
 from enum import Enum, unique
-from typing import Any, ClassVar, Final, TypeVar
+from typing import Any, ClassVar, Final, TypeVar, cast
 
 from typing_extensions import override
 
@@ -21,31 +21,39 @@ from .expression_builders import (
     CharacterClassExpressionBuilder,
     ComplementedCharacterClassExpressionBuilder,
     DoubleQuotedLiteralExpressionBuilder,
+    ExactRepetitionExpressionBuilder,
     ExpressionBuilder,
     NegativeLookaheadExpressionBuilder,
     OneOrMoreExpressionBuilder,
     OptionalExpressionBuilder,
     PositiveLookaheadExpressionBuilder,
+    PositiveOrMoreExpressionBuilder,
+    PositiveRepetitionRangeExpressionBuilder,
     PrioritizedChoiceExpressionBuilder,
     SequenceExpressionBuilder,
     SingleQuotedLiteralExpressionBuilder,
     ZeroOrMoreExpressionBuilder,
+    ZeroRepetitionRangeExpressionBuilder,
 )
 from .expressions import (
     AnyCharacterExpression,
     CharacterClassExpression,
     ComplementedCharacterClassExpression,
     DoubleQuotedLiteralExpression,
+    ExactRepetitionExpression,
     Expression,
     NegativeLookaheadExpression,
     OneOrMoreExpression,
     OptionalExpression,
     PositiveLookaheadExpression,
+    PositiveOrMoreExpression,
+    PositiveRepetitionRangeExpression,
     PrioritizedChoiceExpression,
     RuleReference,
     SequenceExpression,
     SingleQuotedLiteralExpression,
     ZeroOrMoreExpression,
+    ZeroRepetitionRangeExpression,
 )
 from .grammar import Grammar
 from .grammar_builder import GrammarBuilder
@@ -70,6 +78,7 @@ class RuleName(str, Enum):
     )
     END_OF_FILE = 'END_OF_FILE'
     END_OF_LINE = 'END_OF_LINE'
+    EXACT_REPETITION = ExactRepetitionExpression.__name__
     EXPRESSION = Expression.__name__
     FILLER = 'Filler'
     GRAMMAR = Grammar.__name__
@@ -79,6 +88,8 @@ class RuleName(str, Enum):
     ONE_OR_MORE = OneOrMoreExpression.__name__
     OPTIONAL = OptionalExpression.__name__
     POSITIVE_LOOKAHEAD = PositiveLookaheadExpression.__name__
+    POSITIVE_OR_MORE_EXPRESSION = PositiveOrMoreExpression.__name__
+    POSITIVE_REPETITION_RANGE = PositiveRepetitionRangeExpression.__name__
     PRIORITIZED_CHOICE = PrioritizedChoiceExpression.__name__
     PRIORITIZED_CHOICE_VARIANT = (
         f'{PrioritizedChoiceExpression.__name__}Variant'
@@ -92,7 +103,9 @@ class RuleName(str, Enum):
         f'{SingleQuotedLiteralExpression.__name__}Character'
     )
     SPACE = 'Space'
+    UNSIGNED_INTEGER = 'UnsignedInteger'
     ZERO_OR_MORE = ZeroOrMoreExpression.__name__
+    ZERO_REPETITION_RANGE = ZeroRepetitionRangeExpression.__name__
 
     @override
     def __repr__(self, /) -> str:
@@ -163,13 +176,7 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
     ),
 )
 PARSER_GRAMMAR_BUILDER.add_expression_builder(
-    RuleName.LEFT_ARROW,
-    SequenceExpressionBuilder(
-        [
-            SingleQuotedLiteralExpressionBuilder('<-'),
-            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
-        ]
-    ),
+    RuleName.LEFT_ARROW, SingleQuotedLiteralExpressionBuilder('<-')
 )
 PARSER_GRAMMAR_BUILDER.add_expression_builder(
     RuleName.CHARACTER_CLASS_CHARACTER,
@@ -456,6 +463,77 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
     ),
 )
 PARSER_GRAMMAR_BUILDER.add_expression_builder(
+    RuleName.UNSIGNED_INTEGER,
+    PrioritizedChoiceExpressionBuilder(
+        (
+            SequenceExpressionBuilder(
+                [
+                    CharacterClassExpressionBuilder(
+                        [CharacterRange('1', '9')]
+                    ),
+                    ZeroOrMoreExpressionBuilder(
+                        CharacterClassExpressionBuilder(
+                            [CharacterRange('0', '9')]
+                        )
+                    ),
+                ]
+            ),
+            cast(
+                ExpressionBuilder[MatchLeaf | MatchTree],
+                SingleQuotedLiteralExpressionBuilder('0'),
+            ),
+        )
+    ),
+)
+PARSER_GRAMMAR_BUILDER.add_expression_builder(
+    RuleName.EXACT_REPETITION,
+    SequenceExpressionBuilder(
+        [
+            PARSER_GRAMMAR_BUILDER.get_reference('Primary'),
+            SingleQuotedLiteralExpressionBuilder('{'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.UNSIGNED_INTEGER),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
+            SingleQuotedLiteralExpressionBuilder('}'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
+        ]
+    ),
+)
+PARSER_GRAMMAR_BUILDER.add_expression_builder(
+    RuleName.POSITIVE_OR_MORE_EXPRESSION,
+    SequenceExpressionBuilder(
+        [
+            PARSER_GRAMMAR_BUILDER.get_reference('Primary'),
+            SingleQuotedLiteralExpressionBuilder('{'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.UNSIGNED_INTEGER),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
+            SingleQuotedLiteralExpressionBuilder(','),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
+            SingleQuotedLiteralExpressionBuilder('}'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
+        ]
+    ),
+)
+PARSER_GRAMMAR_BUILDER.add_expression_builder(
+    RuleName.POSITIVE_REPETITION_RANGE,
+    SequenceExpressionBuilder(
+        [
+            PARSER_GRAMMAR_BUILDER.get_reference('Primary'),
+            SingleQuotedLiteralExpressionBuilder('{'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.UNSIGNED_INTEGER),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
+            SingleQuotedLiteralExpressionBuilder(','),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.UNSIGNED_INTEGER),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
+            SingleQuotedLiteralExpressionBuilder('}'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
+        ]
+    ),
+)
+PARSER_GRAMMAR_BUILDER.add_expression_builder(
     RuleName.OPTIONAL,
     SequenceExpressionBuilder(
         [
@@ -486,6 +564,22 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
     ),
 )
 PARSER_GRAMMAR_BUILDER.add_expression_builder(
+    RuleName.ZERO_REPETITION_RANGE,
+    SequenceExpressionBuilder(
+        [
+            PARSER_GRAMMAR_BUILDER.get_reference('Primary'),
+            SingleQuotedLiteralExpressionBuilder('{'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
+            SingleQuotedLiteralExpressionBuilder(','),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.UNSIGNED_INTEGER),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
+            SingleQuotedLiteralExpressionBuilder('}'),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
+        ]
+    ),
+)
+PARSER_GRAMMAR_BUILDER.add_expression_builder(
     RuleName.NEGATIVE_LOOKAHEAD,
     SequenceExpressionBuilder(
         [
@@ -511,9 +605,19 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
         [
             PARSER_GRAMMAR_BUILDER.get_reference(RuleName.NEGATIVE_LOOKAHEAD),
             PARSER_GRAMMAR_BUILDER.get_reference(RuleName.POSITIVE_LOOKAHEAD),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.EXACT_REPETITION),
             PARSER_GRAMMAR_BUILDER.get_reference(RuleName.ONE_OR_MORE),
             PARSER_GRAMMAR_BUILDER.get_reference(RuleName.OPTIONAL),
+            PARSER_GRAMMAR_BUILDER.get_reference(
+                RuleName.POSITIVE_OR_MORE_EXPRESSION
+            ),
+            PARSER_GRAMMAR_BUILDER.get_reference(
+                RuleName.POSITIVE_REPETITION_RANGE
+            ),
             PARSER_GRAMMAR_BUILDER.get_reference(RuleName.ZERO_OR_MORE),
+            PARSER_GRAMMAR_BUILDER.get_reference(
+                RuleName.ZERO_REPETITION_RANGE
+            ),
             PARSER_GRAMMAR_BUILDER.get_reference('Primary'),
         ]
     ),
@@ -577,6 +681,7 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
             PARSER_GRAMMAR_BUILDER.get_reference(RuleName.IDENTIFIER),
             PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
             PARSER_GRAMMAR_BUILDER.get_reference(RuleName.LEFT_ARROW),
+            PARSER_GRAMMAR_BUILDER.get_reference(RuleName.FILLER),
             PARSER_GRAMMAR_BUILDER.get_reference(RuleName.EXPRESSION),
         ]
     ),
@@ -593,6 +698,16 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
         ]
     ),
 )
+assert (
+    len(
+        extra_rule_names := [
+            rule_name
+            for rule_name in RuleName
+            if rule_name not in PARSER_GRAMMAR_BUILDER.expression_builders
+        ]
+    )
+    == 0
+), extra_rule_names
 assert (
     len(
         missing_expression_classes := [
@@ -762,6 +877,20 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         assert len(character) == 1, character
         self._literal_characters[-1].append(character)
 
+    def visit_ExactRepetitionExpression(self, match: AnyMatch, /) -> None:
+        assert isinstance(match, MatchTree)
+        with (
+            self._push_expression_builders() as expression_builders,
+            self._push_unsigned_integers() as unsigned_integers,
+        ):
+            for child in match.children:
+                self.visit(child)
+        (expression_builder,) = expression_builders
+        (count,) = unsigned_integers
+        self._expression_builders[-1].append(
+            ExactRepetitionExpressionBuilder(expression_builder, count)
+        )
+
     def visit_Identifier(self, match: AnyMatch, /) -> None:  # noqa: N802
         assert isinstance(match, MatchLeaf | MatchTree), match
         self._identifiers.append(_match_to_str(match))
@@ -778,9 +907,7 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
             NegativeLookaheadExpressionBuilder(expression_builder)
         )
 
-    def visit_OneOrMoreExpression(  # noqa: N802
-        self, match: AnyMatch
-    ) -> None:
+    def visit_OneOrMoreExpression(self, match: AnyMatch) -> None:  # noqa: N802
         assert isinstance(match, MatchTree), match
         with self._push_expression_builders() as expression_builders:
             for child in match.children:
@@ -788,6 +915,40 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         (expression_builder,) = expression_builders
         self._expression_builders[-1].append(
             OneOrMoreExpressionBuilder(expression_builder)
+        )
+
+    def visit_PositiveOrMoreExpression(  # noqa: N802
+        self, match: AnyMatch
+    ) -> None:
+        assert isinstance(match, MatchTree), match
+        with (
+            self._push_expression_builders() as expression_builders,
+            self._push_unsigned_integers() as unsigned_integers,
+        ):
+            for child in match.children:
+                self.visit(child)
+        (expression_builder,) = expression_builders
+        (count,) = unsigned_integers
+        self._expression_builders[-1].append(
+            PositiveOrMoreExpressionBuilder(expression_builder, count)
+        )
+
+    def visit_PositiveRepetitionRangeExpression(  # noqa: N802
+        self, match: AnyMatch
+    ) -> None:
+        assert isinstance(match, MatchTree), match
+        with (
+            self._push_expression_builders() as expression_builders,
+            self._push_unsigned_integers() as unsigned_integers,
+        ):
+            for child in match.children:
+                self.visit(child)
+        (expression_builder,) = expression_builders
+        start, end = unsigned_integers
+        self._expression_builders[-1].append(
+            PositiveRepetitionRangeExpressionBuilder(
+                expression_builder, start, end
+            )
         )
 
     def visit_OptionalExpression(self, match: AnyMatch) -> None:  # noqa: N802
@@ -876,6 +1037,12 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         assert len(character) == 1, character
         self._literal_characters[-1].append(character)
 
+    def visit_UnsignedInteger(self, match: AnyMatch, /) -> None:  # noqa: N802
+        assert isinstance(match, MatchLeaf | MatchTree), match
+        value = int(_match_to_str(match))
+        assert value >= 0, value
+        self._unsigned_integers[-1].append(value)
+
     def visit_ZeroOrMoreExpression(  # noqa: N802
         self, match: AnyMatch
     ) -> None:
@@ -888,16 +1055,21 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
             ZeroOrMoreExpressionBuilder(expression_builder)
         )
 
-    def __init__(self, grammar_builder: GrammarBuilder, /) -> None:
-        super().__init__()
-        self._grammar_builder = grammar_builder
-        self._character_class_characters: list[list[str]] = []
-        self._character_class_elements: list[
-            list[CharacterRange | CharacterSet]
-        ] = []
-        self._expression_builders: list[list[ExpressionBuilder[Any]]] = []
-        self._identifiers: list[str] = []
-        self._literal_characters: list[list[str]] = []
+    def visit_ZeroRepetitionRangeExpression(  # noqa: N802
+        self, match: AnyMatch
+    ) -> None:
+        assert isinstance(match, MatchTree), match
+        with (
+            self._push_expression_builders() as expression_builders,
+            self._push_unsigned_integers() as unsigned_integers,
+        ):
+            for child in match.children:
+                self.visit(child)
+        (expression_builder,) = expression_builders
+        (end,) = unsigned_integers
+        self._expression_builders[-1].append(
+            ZeroRepetitionRangeExpressionBuilder(expression_builder, end)
+        )
 
     @contextlib.contextmanager
     def _push_character_class_characters(self, /) -> Iterator[list[str]]:
@@ -922,6 +1094,23 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
     def _push_literal_characters(self, /) -> Iterator[list[str]]:
         with _push_sublist(self._literal_characters) as result:
             yield result
+
+    @contextlib.contextmanager
+    def _push_unsigned_integers(self, /) -> Iterator[list[int]]:
+        with _push_sublist(self._unsigned_integers) as result:
+            yield result
+
+    def __init__(self, grammar_builder: GrammarBuilder, /) -> None:
+        super().__init__()
+        self._grammar_builder = grammar_builder
+        self._character_class_characters: list[list[str]] = []
+        self._character_class_elements: list[
+            list[CharacterRange | CharacterSet]
+        ] = []
+        self._expression_builders: list[list[ExpressionBuilder[Any]]] = []
+        self._identifiers: list[str] = []
+        self._literal_characters: list[list[str]] = []
+        self._unsigned_integers: list[list[int]] = []
 
 
 assert (

@@ -13,26 +13,30 @@ ComplementedCharacterClassExpression = (
     _module.ComplementedCharacterClassExpression
 )
 DoubleQuotedLiteralExpression = _module.DoubleQuotedLiteralExpression
-SingleQuotedLiteralExpression = _module.SingleQuotedLiteralExpression
+ExactRepetitionExpression = _module.ExactRepetitionExpression
 NegativeLookaheadExpression = _module.NegativeLookaheadExpression
 OneOrMoreExpression = _module.OneOrMoreExpression
 OptionalExpression = _module.OptionalExpression
 PositiveLookaheadExpression = _module.PositiveLookaheadExpression
+PositiveOrMoreExpression = _module.PositiveOrMoreExpression
+PositiveRepetitionRangeExpression = _module.PositiveRepetitionRangeExpression
 PrioritizedChoiceExpression = _module.PrioritizedChoiceExpression
 RuleReference = _module.RuleReference
 SequenceExpression = _module.SequenceExpression
+SingleQuotedLiteralExpression = _module.SingleQuotedLiteralExpression
 ZeroOrMoreExpression = _module.ZeroOrMoreExpression
+ZeroRepetitionRangeExpression = _module.ZeroRepetitionRangeExpression
 
 assert (
     len(
-        missing_classes := [
-            cls.__name__
+        missing_expression_classes := [
+            cls
             for cls in to_package_non_abstract_subclasses(Expression)  # type: ignore[type-abstract]
             if cls is not globals().get(cls.__name__)
         ]
     )
     == 0
-), missing_classes
+), missing_expression_classes
 
 # expression builders
 ExpressionBuilder = _module.ExpressionBuilder
@@ -43,6 +47,14 @@ DoubleQuotedLiteralExpressionBuilder = (
 CharacterClassExpressionBuilder = _module.CharacterClassExpressionBuilder
 ComplementedCharacterClassExpressionBuilder = (
     _module.ComplementedCharacterClassExpressionBuilder
+)
+ExactRepetitionExpressionBuilder = _module.ExactRepetitionExpressionBuilder
+PositiveOrMoreExpressionBuilder = _module.PositiveOrMoreExpressionBuilder
+PositiveRepetitionRangeExpressionBuilder = (
+    _module.PositiveRepetitionRangeExpressionBuilder
+)
+ZeroRepetitionRangeExpressionBuilder = (
+    _module.ZeroRepetitionRangeExpressionBuilder
 )
 SingleQuotedLiteralExpressionBuilder = (
     _module.SingleQuotedLiteralExpressionBuilder
@@ -58,14 +70,14 @@ ZeroOrMoreExpressionBuilder = _module.ZeroOrMoreExpressionBuilder
 
 assert (
     len(
-        missing_classes := [
-            cls.__name__
+        missing_expression_builder_classes := [
+            cls
             for cls in to_package_non_abstract_subclasses(ExpressionBuilder)  # type: ignore[type-abstract]
             if cls is not globals().get(cls.__name__)
         ]
     )
     == 0
-), missing_classes
+), missing_expression_builder_classes
 
 # grammar
 Grammar = _module.Grammar
