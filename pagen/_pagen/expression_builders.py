@@ -907,8 +907,8 @@ class ZeroRepetitionRangeExpressionBuilder(
         self._end, self._expression_builder = end, expression_builder
         return self
 
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
     _end: int
+    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
 
     @override
     def _to_match_classes_impl(
