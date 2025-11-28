@@ -19,6 +19,7 @@ class LookaheadMatch:
         )
 
     def __new__(cls, rule_name: str | None, /) -> Self:
+        _validate_rule_name(rule_name)
         self = super().__new__(cls)
         self._rule_name = rule_name
         return self
@@ -58,6 +59,9 @@ class MatchLeaf:
         )
 
     def __new__(cls, rule_name: str | None, /, *, characters: str) -> Self:
+        _validate_rule_name(rule_name)
+        if not isinstance(characters, str):
+            raise TypeError(type(characters))
         self = super().__new__(cls)
         self._characters, self._rule_name = characters, rule_name
         return self
@@ -107,6 +111,8 @@ class MatchLeaf:
 
 @final
 class MatchTree:
+    MIN_CHILDREN_COUNT: ClassVar[int] = 1
+
     __slots__ = '_children', '_rule_name'
 
     def __init_subclass__(cls, /) -> None:
@@ -121,23 +127,32 @@ class MatchTree:
         *,
         children: Sequence[MatchLeaf | MatchTree],
     ) -> Self:
-        assert len(children) > 0, children
-        assert (
+        _validate_rule_name(rule_name)
+        if len(children) < cls.MIN_CHILDREN_COUNT:
+            raise ValueError(
+                f'Expected at least {cls.MIN_CHILDREN_COUNT!r} children, '
+                f'but got {children!r}.'
+            )
+        if (
             len(
                 invalid_children := [
                     child
                     for child in children
-                    if not isinstance(child, MatchLeaf | MatchTree)
+                    if not isinstance(child, _AnyProgressingMatch)
                 ]
             )
-            == 0
-        ), invalid_children
+            > 0
+        ):
+            raise TypeError(
+                f'All children must have type {_AnyProgressingMatch}, '
+                f'but got {invalid_children!r}.'
+            )
         self = super().__new__(cls)
         self._children, self._rule_name = children, rule_name
         return self
 
     @property
-    def children(self, /) -> Sequence[MatchLeaf | MatchTree]:
+    def children(self, /) -> Sequence[_AnyProgressingMatch]:
         return self._children
 
     @property
@@ -148,7 +163,7 @@ class MatchTree:
     def rule_name(self, /) -> str | None:
         return self._rule_name
 
-    _children: Sequence[MatchLeaf | MatchTree]
+    _children: Sequence[_AnyProgressingMatch]
     _rule_name: str | None
 
     @overload
@@ -189,3 +204,10 @@ MatchT_co = TypeVar(
     MatchTree,
     covariant=True,
 )
+
+_AnyProgressingMatch: TypeAlias = MatchLeaf | MatchTree
+
+
+def _validate_rule_name(rule_name: str | None) -> None:
+    if not isinstance(rule_name, str | None):
+        raise TypeError(type(rule_name))
