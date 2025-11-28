@@ -923,20 +923,20 @@ class ZeroRepetitionRangeExpressionBuilder(
 
 
 def _check_that_expression_builder_is_progressing(
-    expression_builder: ExpressionBuilder[Any], /
+    value: ExpressionBuilder[Any], /
 ) -> None:
-    if not _is_progressing_expression_builder(expression_builder):
-        raise ValueError(expression_builder)
+    if not _is_progressing_expression_builder(value):
+        raise ValueError(
+            f'Expected progressing expression builder, but got {value!r}.'
+        )
 
 
 def _is_progressing_expression_builder(
-    expression_builder: ExpressionBuilder[Any], /
+    value: ExpressionBuilder[Any], /
 ) -> TypeIs[ExpressionBuilder[MatchLeaf | MatchTree]]:
     return not any(
         issubclass(match_cls, LookaheadMatch)
-        for match_cls in (
-            expression_builder.to_match_classes(visited_rule_names=set())
-        )
+        for match_cls in value.to_match_classes(visited_rule_names=set())
     )
 
 
