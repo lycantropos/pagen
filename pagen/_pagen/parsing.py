@@ -58,6 +58,7 @@ from .expressions import (
 from .grammar import Grammar
 from .grammar_builder import GrammarBuilder
 from .match import AnyMatch, MatchLeaf, MatchTree
+from .mismatch import AnyMismatch
 from .rule import Rule
 
 
@@ -479,7 +480,7 @@ PARSER_GRAMMAR_BUILDER.add_expression_builder(
                 ]
             ),
             cast(
-                ExpressionBuilder[MatchLeaf | MatchTree],
+                ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch],
                 SingleQuotedLiteralExpressionBuilder('0'),
             ),
         )
@@ -724,7 +725,7 @@ assert (
         unsupported_classes := [
             cls
             for cls in to_package_non_abstract_subclasses(Expression)  # type: ignore[type-abstract]
-            if cls.__name__ not in PARSER_GRAMMAR._rules
+            if cls.__name__ not in PARSER_GRAMMAR.rules
         ]
     )
     == 0
@@ -1086,7 +1087,7 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
     @contextlib.contextmanager
     def _push_expression_builders(
         self, /
-    ) -> Iterator[list[ExpressionBuilder[Any]]]:
+    ) -> Iterator[list[ExpressionBuilder[Any, Any]]]:
         with _push_sublist(self._expression_builders) as result:
             yield result
 
@@ -1107,7 +1108,7 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         self._character_class_elements: list[
             list[CharacterRange | CharacterSet]
         ] = []
-        self._expression_builders: list[list[ExpressionBuilder[Any]]] = []
+        self._expression_builders: list[list[ExpressionBuilder[Any, Any]]] = []
         self._identifiers: list[str] = []
         self._literal_characters: list[list[str]] = []
         self._unsigned_integers: list[list[int]] = []

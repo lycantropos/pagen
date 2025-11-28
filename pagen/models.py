@@ -82,9 +82,15 @@ assert (
 # grammar
 Grammar = _module.Grammar
 GrammarBuilder = _module.GrammarBuilder
+LeftRecursiveRule = _module.LeftRecursiveRule
+NonLeftRecursiveRule = _module.NonLeftRecursiveRule
 Rule = _module.Rule
 
 # matches
 LookaheadMatch = _module.LookaheadMatch
 MatchLeaf = _module.MatchLeaf
 MatchTree = _module.MatchTree
+
+# mismatches
+MismatchLeaf = _module.MismatchLeaf
+MismatchTree = _module.MismatchTree

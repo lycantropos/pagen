@@ -29,16 +29,23 @@ from .expressions import (
     ZeroRepetitionRangeExpression,
 )
 from .match import AnyMatch, LookaheadMatch, MatchLeaf, MatchT_co, MatchTree
+from .mismatch import (
+    AnyMismatch,
+    MismatchLeaf,
+    MismatchT_co,
+    MismatchTree,
+    NoMismatch,
+)
 from .rule import Rule
 
 
-class ExpressionBuilder(ABC, Generic[MatchT_co]):
+class ExpressionBuilder(ABC, Generic[MatchT_co, MismatchT_co]):
     __slots__ = ()
 
     @abstractmethod
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any]]
-    ) -> Expression[MatchT_co]:
+        self, /, *, rules: Mapping[str, Rule[Any, Any]]
+    ) -> Expression[MatchT_co, MismatchT_co]:
         raise NotImplementedError
 
     @abstractmethod
@@ -55,10 +62,23 @@ class ExpressionBuilder(ABC, Generic[MatchT_co]):
             visited_rule_names=visited_rule_names
         )
 
+    def to_mismatch_classes(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MismatchT_co]]:
+        yield from self._to_mismatch_classes_impl(
+            visited_rule_names=visited_rule_names
+        )
+
     @abstractmethod
     def _to_match_classes_impl(
         self, /, *, visited_rule_names: set[str]
     ) -> Iterable[type[MatchT_co]]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MismatchT_co]]:
         raise NotImplementedError
 
     @abstractmethod
@@ -67,12 +87,14 @@ class ExpressionBuilder(ABC, Generic[MatchT_co]):
 
 
 @final
-class AnyCharacterExpressionBuilder(ExpressionBuilder[MatchLeaf]):
+class AnyCharacterExpressionBuilder(
+    ExpressionBuilder[MatchLeaf, MismatchLeaf]
+):
     __slots__ = ()
 
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any]]
+        self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> AnyCharacterExpression:
         return AnyCharacterExpression()
 
@@ -93,15 +115,23 @@ class AnyCharacterExpressionBuilder(ExpressionBuilder[MatchLeaf]):
         yield MatchLeaf
 
     @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MismatchLeaf]]:
+        yield MismatchLeaf
+
+    @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}()'
 
 
 @final
-class CharacterClassExpressionBuilder(ExpressionBuilder[MatchLeaf]):
+class CharacterClassExpressionBuilder(
+    ExpressionBuilder[MatchLeaf, MismatchLeaf]
+):
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any]]
+        self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> CharacterClassExpression:
         return CharacterClassExpression(self._elements)
 
@@ -134,17 +164,23 @@ class CharacterClassExpressionBuilder(ExpressionBuilder[MatchLeaf]):
         yield MatchLeaf
 
     @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MismatchLeaf]]:
+        yield MismatchLeaf
+
+    @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._elements!r})'
 
 
 @final
 class ComplementedCharacterClassExpressionBuilder(
-    ExpressionBuilder[MatchLeaf]
+    ExpressionBuilder[MatchLeaf, MismatchLeaf]
 ):
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any]]
+        self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> ComplementedCharacterClassExpression:
         return ComplementedCharacterClassExpression(self._elements)
 
@@ -178,15 +214,23 @@ class ComplementedCharacterClassExpressionBuilder(
         yield MatchLeaf
 
     @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MismatchLeaf]]:
+        yield MismatchLeaf
+
+    @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._elements!r})'
 
 
 @final
-class ExactRepetitionExpressionBuilder(ExpressionBuilder[MatchTree]):
+class ExactRepetitionExpressionBuilder(
+    ExpressionBuilder[MatchTree, MismatchTree]
+):
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any]]
+        self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> ExactRepetitionExpression:
         _check_that_expression_builder_is_progressing(self._expression_builder)
         return ExactRepetitionExpression(
@@ -207,7 +251,9 @@ class ExactRepetitionExpressionBuilder(ExpressionBuilder[MatchTree]):
 
     def __new__(
         cls,
-        expression_builder: ExpressionBuilder[MatchLeaf | MatchTree],
+        expression_builder: ExpressionBuilder[
+            MatchLeaf | MatchTree, AnyMismatch
+        ],
         count: int,
         /,
     ) -> Self:
@@ -229,15 +275,21 @@ class ExactRepetitionExpressionBuilder(ExpressionBuilder[MatchTree]):
     ) -> Iterable[type[MatchTree]]:
         yield MatchTree
 
+    @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MismatchTree]]:
+        yield MismatchTree
+
     _count: int
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
+    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
 
     @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._expression_builder!r})'
 
 
-class LiteralExpressionBuilder(ExpressionBuilder[MatchLeaf]):
+class LiteralExpressionBuilder(ExpressionBuilder[MatchLeaf, MismatchLeaf]):
     @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return False
@@ -248,6 +300,12 @@ class LiteralExpressionBuilder(ExpressionBuilder[MatchLeaf]):
     ) -> Iterable[type[MatchLeaf]]:
         yield MatchLeaf
 
+    @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MismatchLeaf]]:
+        yield MismatchLeaf
+
     __slots__ = ()
 
 
@@ -255,7 +313,7 @@ class LiteralExpressionBuilder(ExpressionBuilder[MatchLeaf]):
 class DoubleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any]]
+        self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> DoubleQuotedLiteralExpression:
         return DoubleQuotedLiteralExpression(self._value)
 
@@ -284,7 +342,7 @@ class DoubleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
 class SingleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any]]
+        self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> SingleQuotedLiteralExpression:
         return SingleQuotedLiteralExpression(self._value)
 
@@ -310,10 +368,12 @@ class SingleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
 
 
 @final
-class NegativeLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
+class NegativeLookaheadExpressionBuilder(
+    ExpressionBuilder[LookaheadMatch, MismatchTree]
+):
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any]]
+        self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> NegativeLookaheadExpression:
         _check_that_expression_builder_is_progressing(self._expression_builder)
         return NegativeLookaheadExpression(
@@ -337,14 +397,18 @@ class NegativeLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
         )
 
     def __new__(
-        cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
+        cls,
+        expression_builder: ExpressionBuilder[
+            MatchLeaf | MatchTree, AnyMismatch
+        ],
+        /,
     ) -> Self:
         _validate_expression_builder(expression_builder)
         self = super().__new__(cls)
         self._expression_builder = expression_builder
         return self
 
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
+    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
 
     @override
     def _to_match_classes_impl(
@@ -353,15 +417,21 @@ class NegativeLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
         yield LookaheadMatch
 
     @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MismatchTree]]:
+        yield MismatchTree
+
+    @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._expression_builder!r})'
 
 
 @final
-class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree]):
+class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any]]
+        self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> OneOrMoreExpression:
         _check_that_expression_builder_is_progressing(self._expression_builder)
         return OneOrMoreExpression(self._expression_builder.build(rules=rules))
@@ -379,14 +449,18 @@ class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree]):
         )
 
     def __new__(
-        cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
+        cls,
+        expression_builder: ExpressionBuilder[
+            MatchLeaf | MatchTree, AnyMismatch
+        ],
+        /,
     ) -> Self:
         _validate_expression_builder(expression_builder)
         self = super().__new__(cls)
         self._expression_builder = expression_builder
         return self
 
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
+    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
 
     @override
     def _to_match_classes_impl(
@@ -395,15 +469,21 @@ class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree]):
         yield MatchTree
 
     @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MismatchTree]]:
+        yield MismatchTree
+
+    @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._expression_builder!r})'
 
 
 @final
-class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch]):
+class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch, NoMismatch]):
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any]]
+        self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> OptionalExpression:
         _check_that_expression_builder_is_progressing(self._expression_builder)
         return OptionalExpression(self._expression_builder.build(rules=rules))
@@ -421,14 +501,18 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch]):
         )
 
     def __new__(
-        cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
+        cls,
+        expression_builder: ExpressionBuilder[
+            MatchLeaf | MatchTree, AnyMismatch
+        ],
+        /,
     ) -> Self:
         _validate_expression_builder(expression_builder)
         self = super().__new__(cls)
         self._expression_builder = expression_builder
         return self
 
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
+    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
 
     @override
     def _to_match_classes_impl(
@@ -440,15 +524,23 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch]):
         )
 
     @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[NoMismatch]]:
+        yield from ()
+
+    @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._expression_builder!r})'
 
 
 @final
-class PositiveLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
+class PositiveLookaheadExpressionBuilder(
+    ExpressionBuilder[LookaheadMatch, MismatchTree]
+):
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any]]
+        self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> PositiveLookaheadExpression:
         _check_that_expression_builder_is_progressing(self._expression_builder)
         return PositiveLookaheadExpression(
@@ -472,13 +564,17 @@ class PositiveLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
         )
 
     def __new__(
-        cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
+        cls,
+        expression_builder: ExpressionBuilder[
+            MatchLeaf | MatchTree, AnyMismatch
+        ],
+        /,
     ) -> Self:
         self = super().__new__(cls)
         self._expression_builder = expression_builder
         return self
 
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
+    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
 
     @override
     def _to_match_classes_impl(
@@ -487,15 +583,23 @@ class PositiveLookaheadExpressionBuilder(ExpressionBuilder[LookaheadMatch]):
         yield LookaheadMatch
 
     @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MismatchTree]]:
+        yield MismatchTree
+
+    @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._expression_builder!r})'
 
 
 @final
-class PositiveOrMoreExpressionBuilder(ExpressionBuilder[MatchTree]):
+class PositiveOrMoreExpressionBuilder(
+    ExpressionBuilder[MatchTree, MismatchTree]
+):
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any]]
+        self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> PositiveOrMoreExpression:
         _check_that_expression_builder_is_progressing(self._expression_builder)
         return PositiveOrMoreExpression(
@@ -516,7 +620,9 @@ class PositiveOrMoreExpressionBuilder(ExpressionBuilder[MatchTree]):
 
     def __new__(
         cls,
-        expression_builder: ExpressionBuilder[MatchLeaf | MatchTree],
+        expression_builder: ExpressionBuilder[
+            MatchLeaf | MatchTree, AnyMismatch
+        ],
         start: int,
         /,
     ) -> Self:
@@ -532,7 +638,7 @@ class PositiveOrMoreExpressionBuilder(ExpressionBuilder[MatchTree]):
         self._expression_builder, self._start = expression_builder, start
         return self
 
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
+    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
     _start: int
 
     @override
@@ -542,14 +648,22 @@ class PositiveOrMoreExpressionBuilder(ExpressionBuilder[MatchTree]):
         yield MatchTree
 
     @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MismatchTree]]:
+        yield MismatchTree
+
+    @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._expression_builder!r})'
 
 
 @final
-class PositiveRepetitionRangeExpressionBuilder(ExpressionBuilder[MatchTree]):
+class PositiveRepetitionRangeExpressionBuilder(
+    ExpressionBuilder[MatchTree, MismatchTree]
+):
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any]]
+        self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> PositiveRepetitionRangeExpression:
         _check_that_expression_builder_is_progressing(self._expression_builder)
         return PositiveRepetitionRangeExpression(
@@ -569,7 +683,9 @@ class PositiveRepetitionRangeExpressionBuilder(ExpressionBuilder[MatchTree]):
 
     def __new__(
         cls,
-        expression_builder: ExpressionBuilder[MatchLeaf | MatchTree],
+        expression_builder: ExpressionBuilder[
+            MatchLeaf | MatchTree, AnyMismatch
+        ],
         start: int,
         end: int,
         /,
@@ -596,8 +712,8 @@ class PositiveRepetitionRangeExpressionBuilder(ExpressionBuilder[MatchTree]):
         )
         return self
 
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
     _end: int
+    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
     _start: int
 
     @override
@@ -607,15 +723,23 @@ class PositiveRepetitionRangeExpressionBuilder(ExpressionBuilder[MatchTree]):
         yield MatchTree
 
     @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MismatchTree]]:
+        yield MismatchTree
+
+    @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._expression_builder!r})'
 
 
 @final
-class PrioritizedChoiceExpressionBuilder(ExpressionBuilder[MatchT_co]):
+class PrioritizedChoiceExpressionBuilder(
+    ExpressionBuilder[MatchT_co, MismatchTree]
+):
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any]]
+        self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> PrioritizedChoiceExpression[MatchT_co]:
         return PrioritizedChoiceExpression(
             [
@@ -640,10 +764,14 @@ class PrioritizedChoiceExpressionBuilder(ExpressionBuilder[MatchT_co]):
         )
 
     def __new__(
-        cls, variant_builders: Sequence[ExpressionBuilder[MatchT_co]], /
+        cls,
+        variant_builders: Sequence[ExpressionBuilder[MatchT_co, AnyMismatch]],
+        /,
     ) -> Self:
         assert len(variant_builders) > 1, variant_builders
-        flattened_variant_builders: list[ExpressionBuilder[MatchT_co]] = []
+        flattened_variant_builders: list[
+            ExpressionBuilder[MatchT_co, AnyMismatch]
+        ] = []
         for variant_builder in variant_builders:
             if isinstance(variant_builder, PrioritizedChoiceExpressionBuilder):
                 flattened_variant_builders.extend(
@@ -655,7 +783,7 @@ class PrioritizedChoiceExpressionBuilder(ExpressionBuilder[MatchT_co]):
         self._variant_builders = flattened_variant_builders
         return self
 
-    _variant_builders: Sequence[ExpressionBuilder[MatchT_co]]
+    _variant_builders: Sequence[ExpressionBuilder[MatchT_co, AnyMismatch]]
 
     @override
     def _to_match_classes_impl(
@@ -667,17 +795,23 @@ class PrioritizedChoiceExpressionBuilder(ExpressionBuilder[MatchT_co]):
             )
 
     @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MismatchTree]]:
+        yield MismatchTree
+
+    @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._variant_builders!r})'
 
 
 @final
-class RuleReferenceBuilder(ExpressionBuilder[MatchT_co]):
+class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any]]
-    ) -> RuleReference[MatchT_co]:
-        cursor: RuleReferenceBuilder[Any] = self
+        self, /, *, rules: Mapping[str, Rule[Any, Any]]
+    ) -> RuleReference[MatchT_co, MismatchT_co]:
+        cursor: RuleReferenceBuilder[Any, Any] = self
         visited_rule_names: list[str] = []
         while True:
             cursor_name: str = cursor._name
@@ -702,6 +836,9 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co]):
                     cursor_name,
                     match_classes=list(
                         candidate.to_match_classes(visited_rule_names=set())
+                    ),
+                    mismatch_classes=list(
+                        candidate.to_mismatch_classes(visited_rule_names=set())
                     ),
                     rules=rules,
                 )
@@ -731,14 +868,18 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co]):
         name: str,
         /,
         *,
-        expression_builders: Mapping[str, ExpressionBuilder[MatchT_co]],
+        expression_builders: Mapping[
+            str, ExpressionBuilder[MatchT_co, MismatchT_co]
+        ],
     ) -> Self:
         assert len(name) > 0, name
         self = super().__new__(cls)
         self._expression_builders, self._name = expression_builders, name
         return self
 
-    _expression_builders: Mapping[str, ExpressionBuilder[MatchT_co]]
+    _expression_builders: Mapping[
+        str, ExpressionBuilder[MatchT_co, MismatchT_co]
+    ]
     _name: str
 
     @override
@@ -751,6 +892,19 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co]):
         yield from self._expression_builders[self._name].to_match_classes(
             visited_rule_names=visited_rule_names
         )
+        visited_rule_names.remove(self._name)
+
+    @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MismatchT_co]]:
+        if self._name in visited_rule_names:
+            return
+        visited_rule_names.add(self._name)
+        yield from self._expression_builders[self._name].to_mismatch_classes(
+            visited_rule_names=visited_rule_names
+        )
+        visited_rule_names.remove(self._name)
 
     @override
     def __repr__(self, /) -> str:
@@ -764,10 +918,10 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co]):
 
 
 @final
-class SequenceExpressionBuilder(ExpressionBuilder[MatchTree]):
+class SequenceExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any]]
+        self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> SequenceExpression:
         if not any(
             _is_progressing_expression_builder(element_builder)
@@ -800,14 +954,16 @@ class SequenceExpressionBuilder(ExpressionBuilder[MatchTree]):
         )
 
     def __new__(
-        cls, element_builders: Sequence[ExpressionBuilder[AnyMatch]], /
+        cls,
+        element_builders: Sequence[ExpressionBuilder[AnyMatch, AnyMismatch]],
+        /,
     ) -> Self:
         assert len(element_builders) > 1, element_builders
         self = super().__new__(cls)
         self._element_builders = element_builders
         return self
 
-    _element_builders: Sequence[ExpressionBuilder[AnyMatch]]
+    _element_builders: Sequence[ExpressionBuilder[AnyMatch, AnyMismatch]]
 
     @override
     def _to_match_classes_impl(
@@ -816,17 +972,23 @@ class SequenceExpressionBuilder(ExpressionBuilder[MatchTree]):
         yield MatchTree
 
     @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MismatchTree]]:
+        yield MismatchTree
+
+    @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._element_builders!r})'
 
 
 @final
 class ZeroOrMoreExpressionBuilder(
-    ExpressionBuilder[LookaheadMatch | MatchTree]
+    ExpressionBuilder[LookaheadMatch | MatchTree, NoMismatch]
 ):
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any]]
+        self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> ZeroOrMoreExpression:
         _check_that_expression_builder_is_progressing(self._expression_builder)
         return ZeroOrMoreExpression(
@@ -846,14 +1008,18 @@ class ZeroOrMoreExpressionBuilder(
         )
 
     def __new__(
-        cls, expression_builder: ExpressionBuilder[MatchLeaf | MatchTree], /
+        cls,
+        expression_builder: ExpressionBuilder[
+            MatchLeaf | MatchTree, AnyMismatch
+        ],
+        /,
     ) -> Self:
         _validate_expression_builder(expression_builder)
         self = super().__new__(cls)
         self._expression_builder = expression_builder
         return self
 
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
+    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
 
     @override
     def _to_match_classes_impl(
@@ -863,15 +1029,21 @@ class ZeroOrMoreExpressionBuilder(
         yield MatchTree
 
     @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[NoMismatch]]:
+        yield from ()
+
+    @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._expression_builder!r})'
 
 
 class ZeroRepetitionRangeExpressionBuilder(
-    ExpressionBuilder[LookaheadMatch | MatchTree]
+    ExpressionBuilder[LookaheadMatch | MatchTree, NoMismatch]
 ):
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any]]
+        self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> ZeroRepetitionRangeExpression:
         _check_that_expression_builder_is_progressing(self._expression_builder)
         return ZeroRepetitionRangeExpression(
@@ -891,7 +1063,9 @@ class ZeroRepetitionRangeExpressionBuilder(
 
     def __new__(
         cls,
-        expression_builder: ExpressionBuilder[MatchLeaf | MatchTree],
+        expression_builder: ExpressionBuilder[
+            MatchLeaf | MatchTree, AnyMismatch
+        ],
         end: int,
         /,
     ) -> Self:
@@ -908,7 +1082,7 @@ class ZeroRepetitionRangeExpressionBuilder(
         return self
 
     _end: int
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree]
+    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
 
     @override
     def _to_match_classes_impl(
@@ -918,12 +1092,18 @@ class ZeroRepetitionRangeExpressionBuilder(
         yield MatchTree
 
     @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[NoMismatch]]:
+        yield from ()
+
+    @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._expression_builder!r})'
 
 
 def _check_that_expression_builder_is_progressing(
-    value: ExpressionBuilder[Any], /
+    value: ExpressionBuilder[Any, Any], /
 ) -> None:
     if not _is_progressing_expression_builder(value):
         raise ValueError(
@@ -932,8 +1112,8 @@ def _check_that_expression_builder_is_progressing(
 
 
 def _is_progressing_expression_builder(
-    value: ExpressionBuilder[Any], /
-) -> TypeIs[ExpressionBuilder[MatchLeaf | MatchTree]]:
+    value: ExpressionBuilder[Any, Any], /
+) -> TypeIs[ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]]:
     return not any(
         issubclass(match_cls, LookaheadMatch)
         for match_cls in value.to_match_classes(visited_rule_names=set())

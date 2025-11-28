@@ -6,14 +6,20 @@ from typing import Any, Generic, overload
 from typing_extensions import Self, override
 
 from .match import MatchT_co
-from .mismatch import is_mismatch
+from .mismatch import MismatchT_co, is_mismatch
 from .rule import Rule
 
 
-class Grammar(Generic[MatchT_co]):
+class Grammar(Generic[MatchT_co, MismatchT_co]):
+    @property
+    def rules(self, /) -> Mapping[str, Rule[MatchT_co, MismatchT_co]]:
+        return self._rules
+
     __slots__ = ('_rules',)
 
-    def __new__(cls, rules: Mapping[str, Rule[MatchT_co]], /) -> Self:
+    def __new__(
+        cls, rules: Mapping[str, Rule[MatchT_co, MismatchT_co]], /
+    ) -> Self:
         self = super().__new__(cls)
         self._rules = rules
         return self
@@ -22,12 +28,17 @@ class Grammar(Generic[MatchT_co]):
         result = self._rules[starting_rule_name].parse(
             value, 0, cache={}, rule_name=None
         )
-        if is_mismatch(result) or result.characters_count < len(value):
+        if is_mismatch(result):
             raise ValueError(result)
+        if result.characters_count < len(value):
+            raise ValueError(
+                f'{value[result.characters_count :]!r} '
+                'is unprocessed by the parser'
+            )
         assert result.characters_count == len(value), (result, value)
         return result
 
-    _rules: Mapping[str, Rule[MatchT_co]]
+    _rules: Mapping[str, Rule[MatchT_co, MismatchT_co]]
 
     @overload
     def __eq__(self, other: Self, /) -> bool: ...

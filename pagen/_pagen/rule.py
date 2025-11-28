@@ -7,15 +7,15 @@ from typing_extensions import Self, override
 
 from .expressions import Expression
 from .match import AnyMatch, MatchT_co
-from .mismatch import Mismatch, is_mismatch
+from .mismatch import AnyMismatch, MismatchLeaf, MismatchT_co, is_mismatch
 
 
-class Rule(ABC, Generic[MatchT_co]):
+class Rule(ABC, Generic[MatchT_co, MismatchT_co]):
     __slots__ = ()
 
     @property
     @abstractmethod
-    def expression(self, /) -> Expression[MatchT_co]:
+    def expression(self, /) -> Expression[MatchT_co, MismatchT_co]:
         raise NotImplementedError
 
     @property
@@ -30,9 +30,9 @@ class Rule(ABC, Generic[MatchT_co]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | Mismatch]],
+        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
         rule_name: str | None,
-    ) -> MatchT_co | Mismatch:
+    ) -> MatchT_co | MismatchT_co:
         raise NotImplementedError
 
     @override
@@ -40,17 +40,19 @@ class Rule(ABC, Generic[MatchT_co]):
         return f'{self.name} <- {self.expression}'
 
 
-class LeftRecursiveRule(Rule[MatchT_co]):
+class LeftRecursiveRule(Rule[MatchT_co, MismatchT_co]):
     __slots__ = '_expression', '_name'
 
-    def __new__(cls, name: str, expression: Expression[MatchT_co], /) -> Self:
+    def __new__(
+        cls, name: str, expression: Expression[MatchT_co, MismatchT_co], /
+    ) -> Self:
         self = super().__new__(cls)
         self._expression, self._name = expression, name
         return self
 
     @property
     @override
-    def expression(self, /) -> Expression[MatchT_co]:
+    def expression(self, /) -> Expression[MatchT_co, MismatchT_co]:
         return self._expression
 
     @property
@@ -65,17 +67,17 @@ class LeftRecursiveRule(Rule[MatchT_co]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | Mismatch]],
+        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
         rule_name: str | None,
-    ) -> MatchT_co | Mismatch:
+    ) -> MatchT_co | MismatchT_co:
         name = self._name if rule_name is None else rule_name
         name_cache = cache.setdefault(name, {})
         if (match := name_cache.get(index)) is not None:
-            assert is_mismatch(match) or self.expression.is_valid_match(
+            assert self.expression.is_valid_mismatch(
                 match
-            ), match
+            ) or self.expression.is_valid_match(match), match
             return match
-        name_cache[index] = Mismatch(rule_name, index)
+        name_cache[index] = MismatchLeaf(rule_name, characters='')
         result = name_cache[index] = self._expression.evaluate(
             text, index, cache=cache, rule_name=name
         )
@@ -95,7 +97,7 @@ class LeftRecursiveRule(Rule[MatchT_co]):
             last_characters_count = candidate.characters_count
         return result
 
-    _expression: Expression[MatchT_co]
+    _expression: Expression[MatchT_co, MismatchT_co]
     _name: str
 
     @overload
@@ -124,17 +126,19 @@ class LeftRecursiveRule(Rule[MatchT_co]):
         )
 
 
-class NonLeftRecursiveRule(Rule[MatchT_co]):
+class NonLeftRecursiveRule(Rule[MatchT_co, MismatchT_co]):
     __slots__ = '_expression', '_name'
 
-    def __new__(cls, name: str, expression: Expression[MatchT_co], /) -> Self:
+    def __new__(
+        cls, name: str, expression: Expression[MatchT_co, MismatchT_co], /
+    ) -> Self:
         self = super().__new__(cls)
         self._expression, self._name = expression, name
         return self
 
     @property
     @override
-    def expression(self, /) -> Expression[MatchT_co]:
+    def expression(self, /) -> Expression[MatchT_co, MismatchT_co]:
         return self._expression
 
     @property
@@ -149,22 +153,22 @@ class NonLeftRecursiveRule(Rule[MatchT_co]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | Mismatch]],
+        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
         rule_name: str | None,
-    ) -> MatchT_co | Mismatch:
+    ) -> MatchT_co | MismatchT_co:
         name = self._name if rule_name is None else rule_name
         name_cache = cache.setdefault(name, {})
         if (match := name_cache.get(index)) is not None:
-            assert is_mismatch(match) or self.expression.is_valid_match(
+            assert self.expression.is_valid_mismatch(
                 match
-            ), match
+            ) or self.expression.is_valid_match(match), match
             return match
         result = name_cache[index] = self._expression.evaluate(
             text, index, cache=cache, rule_name=name
         )
         return result
 
-    _expression: Expression[MatchT_co]
+    _expression: Expression[MatchT_co, MismatchT_co]
     _name: str
 
     @overload

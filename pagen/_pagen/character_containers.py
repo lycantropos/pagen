@@ -16,6 +16,14 @@ from .constants import (
 
 @final
 class CharacterRange:
+    @property
+    def end(self, /) -> str:
+        return self._end
+
+    @property
+    def start(self, /) -> str:
+        return self._start
+
     __slots__ = '_end', '_start'
 
     def __init_subclass__(cls, /) -> None:
@@ -75,6 +83,10 @@ class CharacterRange:
 
 @final
 class CharacterSet:
+    @property
+    def elements(self, /) -> str:
+        return self._elements
+
     __slots__ = ('_elements',)
 
     def __init_subclass__(cls, /) -> None:
@@ -93,10 +105,6 @@ class CharacterSet:
         self = super().__new__(cls)
         self._elements = elements
         return self
-
-    @property
-    def elements(self, /) -> str:
-        return self._elements
 
     _elements: str
 

@@ -49,6 +49,14 @@ from .match import (
     MatchLeaf as MatchLeaf,
     MatchTree as MatchTree,
 )
-from .mismatch import is_mismatch as is_mismatch
+from .mismatch import (
+    MismatchLeaf as MismatchLeaf,
+    MismatchTree as MismatchTree,
+    is_mismatch as is_mismatch,
+)
 from .parsing import parse_grammar as parse_grammar
-from .rule import Rule as Rule
+from .rule import (
+    LeftRecursiveRule as LeftRecursiveRule,
+    NonLeftRecursiveRule as NonLeftRecursiveRule,
+    Rule as Rule,
+)
