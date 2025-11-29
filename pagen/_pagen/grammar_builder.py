@@ -19,16 +19,20 @@ class GrammarBuilder(Generic[MatchT_co, MismatchT_co]):
     ) -> Mapping[str, ExpressionBuilder[MatchT_co, MismatchT_co]]:
         return self._expression_builders
 
-    def add_expression_builder(
+    def add_rule(
         self,
         name: str,
         expression_builder: ExpressionBuilder[MatchT_co, MismatchT_co],
         /,
     ) -> None:
-        assert name not in self._expression_builders, (
-            self._expression_builders[name],
-            expression_builder,
-        )
+        if (
+            existing_expression_builder := self._expression_builders.get(name)
+        ) is not None:
+            raise ValueError(
+                f'Rule redefinition is not allowed, '
+                f'but for {name!r} tried to replace '
+                f'{existing_expression_builder!r} with {expression_builder!r}.'
+            )
         self._expression_builders[name] = expression_builder
 
     def build(self, /) -> Grammar[MatchT_co, MismatchT_co]:
