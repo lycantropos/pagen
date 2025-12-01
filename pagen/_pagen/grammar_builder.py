@@ -41,6 +41,20 @@ class GrammarBuilder(Generic[MatchT_co, MismatchT_co]):
             LeftRecursiveRule[MatchT_co, MismatchT_co]
             | NonLeftRecursiveRule[MatchT_co, MismatchT_co],
         ] = {}
+        if (
+            len(
+                non_terminating_rules := [
+                    name
+                    for name, builder in self._expression_builders.items()
+                    if not builder.is_terminating(set())
+                ]
+            )
+            > 0
+        ):
+            raise ValueError(
+                'All rules should be terminating, '
+                f'but found: {", ".join(map(repr, non_terminating_rules))}.'
+            )
         for name, builder in self._expression_builders.items():
             expression = builder.build(rules=rules)
             if builder.is_left_recursive(set()):

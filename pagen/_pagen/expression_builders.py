@@ -40,8 +40,6 @@ from .rule import Rule
 
 
 class ExpressionBuilder(ABC, Generic[MatchT_co, MismatchT_co]):
-    __slots__ = ()
-
     @abstractmethod
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
@@ -52,8 +50,9 @@ class ExpressionBuilder(ABC, Generic[MatchT_co, MismatchT_co]):
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         raise NotImplementedError
 
-    def is_lookahead(self, /) -> bool:
-        return False
+    @abstractmethod
+    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+        raise NotImplementedError
 
     def to_match_classes(
         self, /, *, visited_rule_names: set[str]
@@ -68,6 +67,8 @@ class ExpressionBuilder(ABC, Generic[MatchT_co, MismatchT_co]):
         yield from self._to_mismatch_classes_impl(
             visited_rule_names=visited_rule_names
         )
+
+    __slots__ = ()
 
     @abstractmethod
     def _to_match_classes_impl(
@@ -90,8 +91,6 @@ class ExpressionBuilder(ABC, Generic[MatchT_co, MismatchT_co]):
 class AnyCharacterExpressionBuilder(
     ExpressionBuilder[MatchLeaf, MismatchLeaf]
 ):
-    __slots__ = ()
-
     @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
@@ -101,6 +100,12 @@ class AnyCharacterExpressionBuilder(
     @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return False
+
+    @override
+    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+        return True
+
+    __slots__ = ()
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
@@ -138,6 +143,10 @@ class CharacterClassExpressionBuilder(
     @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return False
+
+    @override
+    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+        return True
 
     __slots__ = ('_elements',)
 
@@ -187,6 +196,10 @@ class ComplementedCharacterClassExpressionBuilder(
     @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return False
+
+    @override
+    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+        return True
 
     __slots__ = ('_elements',)
 
@@ -240,6 +253,10 @@ class ExactRepetitionExpressionBuilder(
     @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_left_recursive(visited_rule_names)
+
+    @override
+    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.is_terminating(visited_rule_names)
 
     __slots__ = '_count', '_expression_builder'
 
@@ -295,6 +312,12 @@ class LiteralExpressionBuilder(ExpressionBuilder[MatchLeaf, MismatchLeaf]):
         return False
 
     @override
+    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+        return True
+
+    __slots__ = ()
+
+    @override
     def _to_match_classes_impl(
         self, /, *, visited_rule_names: set[str]
     ) -> Iterable[type[MatchLeaf]]:
@@ -305,8 +328,6 @@ class LiteralExpressionBuilder(ExpressionBuilder[MatchLeaf, MismatchLeaf]):
         self, /, *, visited_rule_names: set[str]
     ) -> Iterable[type[MismatchLeaf]]:
         yield MismatchLeaf
-
-    __slots__ = ()
 
 
 @final
@@ -381,12 +402,12 @@ class NegativeLookaheadExpressionBuilder(
         )
 
     @override
-    def is_lookahead(self, /) -> bool:
-        return True
-
-    @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_left_recursive(visited_rule_names)
+
+    @override
+    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.is_terminating(visited_rule_names)
 
     __slots__ = ('_expression_builder',)
 
@@ -440,6 +461,10 @@ class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_left_recursive(visited_rule_names)
 
+    @override
+    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.is_terminating(visited_rule_names)
+
     __slots__ = ('_expression_builder',)
 
     def __init_subclass__(cls, /) -> None:
@@ -491,6 +516,10 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch, NoMismatch]):
     @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_left_recursive(visited_rule_names)
+
+    @override
+    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.is_terminating(visited_rule_names)
 
     __slots__ = ('_expression_builder',)
 
@@ -548,12 +577,12 @@ class PositiveLookaheadExpressionBuilder(
         )
 
     @override
-    def is_lookahead(self, /) -> bool:
-        return True
-
-    @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_left_recursive(visited_rule_names)
+
+    @override
+    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.is_terminating(visited_rule_names)
 
     __slots__ = ('_expression_builder',)
 
@@ -609,6 +638,10 @@ class PositiveOrMoreExpressionBuilder(
     @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_left_recursive(visited_rule_names)
+
+    @override
+    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.is_terminating(visited_rule_names)
 
     __slots__ = '_expression_builder', '_start'
 
@@ -672,6 +705,10 @@ class PositiveRepetitionRangeExpressionBuilder(
 
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_left_recursive(visited_rule_names)
+
+    @override
+    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.is_terminating(visited_rule_names)
 
     __slots__ = '_end', '_expression_builder', '_start'
 
@@ -752,6 +789,13 @@ class PrioritizedChoiceExpressionBuilder(
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return any(
             variant_builder.is_left_recursive(visited_rule_names)
+            for variant_builder in self._variant_builders
+        )
+
+    @override
+    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+        return any(
+            variant_builder.is_terminating(visited_rule_names)
             for variant_builder in self._variant_builders
         )
 
@@ -855,6 +899,17 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
         visited_rule_names.remove(self._name)
         return result
 
+    @override
+    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+        if self._name in visited_rule_names:
+            return False
+        visited_rule_names.add(self._name)
+        result = self._expression_builders[self._name].is_terminating(
+            visited_rule_names
+        )
+        visited_rule_names.remove(self._name)
+        return result
+
     __slots__ = '_expression_builders', '_name'
 
     def __init_subclass__(cls, /) -> None:
@@ -938,12 +993,25 @@ class SequenceExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
     @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         for element_builder in self._element_builders:
-            if element_builder.is_lookahead():
+            if isinstance(
+                element_builder,
+                (
+                    NegativeLookaheadExpressionBuilder
+                    | PositiveLookaheadExpressionBuilder
+                ),
+            ):
                 if element_builder.is_left_recursive(visited_rule_names):
                     return True
                 continue
             return element_builder.is_left_recursive(visited_rule_names)
         raise ValueError('Sequence consists of non-left recursive lookaheads.')
+
+    @override
+    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+        return all(
+            element_builder.is_terminating(visited_rule_names)
+            for element_builder in self._element_builders
+        )
 
     __slots__ = ('_element_builders',)
 
@@ -999,6 +1067,10 @@ class ZeroOrMoreExpressionBuilder(
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_left_recursive(visited_rule_names)
 
+    @override
+    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.is_terminating(visited_rule_names)
+
     __slots__ = ('_expression_builder',)
 
     def __init_subclass__(cls, /) -> None:
@@ -1052,6 +1124,10 @@ class ZeroRepetitionRangeExpressionBuilder(
 
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_left_recursive(visited_rule_names)
+
+    @override
+    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.is_terminating(visited_rule_names)
 
     __slots__ = '_end', '_expression_builder'
 
