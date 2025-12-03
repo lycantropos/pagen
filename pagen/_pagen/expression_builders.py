@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, Generic, final
+from typing import Any, ClassVar, Generic, final
 
-from typing_extensions import Self, TypeIs, override
+from typing_extensions import Self, override
 
 from . import CharacterRange, CharacterSet
 from .character_containers import merge_consecutive_character_sets
@@ -48,6 +48,10 @@ class ExpressionBuilder(ABC, Generic[MatchT_co, MismatchT_co]):
 
     @abstractmethod
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
         raise NotImplementedError
 
     @abstractmethod
@@ -102,6 +106,10 @@ class AnyCharacterExpressionBuilder(
         return False
 
     @override
+    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+        return False
+
+    @override
     def is_terminating(self, visited_rule_names: set[str], /) -> bool:
         return True
 
@@ -145,6 +153,10 @@ class CharacterClassExpressionBuilder(
         return False
 
     @override
+    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+        return False
+
+    @override
     def is_terminating(self, visited_rule_names: set[str], /) -> bool:
         return True
 
@@ -156,6 +168,7 @@ class CharacterClassExpressionBuilder(
             'is not an acceptable base type'
         )
 
+    @override
     def __new__(
         cls, elements: Sequence[CharacterRange | CharacterSet], /
     ) -> Self:
@@ -198,6 +211,10 @@ class ComplementedCharacterClassExpressionBuilder(
         return False
 
     @override
+    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+        return False
+
+    @override
     def is_terminating(self, visited_rule_names: set[str], /) -> bool:
         return True
 
@@ -210,6 +227,7 @@ class ComplementedCharacterClassExpressionBuilder(
             'is not an acceptable base type'
         )
 
+    @override
     def __new__(
         cls, elements: Sequence[CharacterRange | CharacterSet], /
     ) -> Self:
@@ -255,6 +273,10 @@ class ExactRepetitionExpressionBuilder(
         return self._expression_builder.is_left_recursive(visited_rule_names)
 
     @override
+    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+        return False
+
+    @override
     def is_terminating(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_terminating(visited_rule_names)
 
@@ -266,6 +288,7 @@ class ExactRepetitionExpressionBuilder(
             'is not an acceptable base type'
         )
 
+    @override
     def __new__(
         cls,
         expression_builder: ExpressionBuilder[
@@ -312,6 +335,10 @@ class LiteralExpressionBuilder(ExpressionBuilder[MatchLeaf, MismatchLeaf]):
         return False
 
     @override
+    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+        return False
+
+    @override
     def is_terminating(self, visited_rule_names: set[str], /) -> bool:
         return True
 
@@ -346,6 +373,7 @@ class DoubleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
             'is not an acceptable base type'
         )
 
+    @override
     def __new__(cls, value: str, /) -> Self:
         assert len(value) > 0, value
         self = super().__new__(cls)
@@ -375,6 +403,7 @@ class SingleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
             'is not an acceptable base type'
         )
 
+    @override
     def __new__(cls, value: str, /) -> Self:
         assert len(value) > 0, value
         self = super().__new__(cls)
@@ -406,6 +435,10 @@ class NegativeLookaheadExpressionBuilder(
         return self._expression_builder.is_left_recursive(visited_rule_names)
 
     @override
+    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+        return True
+
+    @override
     def is_terminating(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_terminating(visited_rule_names)
 
@@ -417,6 +450,7 @@ class NegativeLookaheadExpressionBuilder(
             'is not an acceptable base type'
         )
 
+    @override
     def __new__(
         cls,
         expression_builder: ExpressionBuilder[
@@ -462,6 +496,10 @@ class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
         return self._expression_builder.is_left_recursive(visited_rule_names)
 
     @override
+    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.is_nullable(visited_rule_names)
+
+    @override
     def is_terminating(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_terminating(visited_rule_names)
 
@@ -473,6 +511,7 @@ class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
             'is not an acceptable base type'
         )
 
+    @override
     def __new__(
         cls,
         expression_builder: ExpressionBuilder[
@@ -518,6 +557,10 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch, NoMismatch]):
         return self._expression_builder.is_left_recursive(visited_rule_names)
 
     @override
+    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+        return True
+
+    @override
     def is_terminating(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_terminating(visited_rule_names)
 
@@ -529,6 +572,7 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch, NoMismatch]):
             'is not an acceptable base type'
         )
 
+    @override
     def __new__(
         cls,
         expression_builder: ExpressionBuilder[
@@ -581,6 +625,10 @@ class PositiveLookaheadExpressionBuilder(
         return self._expression_builder.is_left_recursive(visited_rule_names)
 
     @override
+    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+        return True
+
+    @override
     def is_terminating(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_terminating(visited_rule_names)
 
@@ -592,6 +640,7 @@ class PositiveLookaheadExpressionBuilder(
             'is not an acceptable base type'
         )
 
+    @override
     def __new__(
         cls,
         expression_builder: ExpressionBuilder[
@@ -640,6 +689,10 @@ class PositiveOrMoreExpressionBuilder(
         return self._expression_builder.is_left_recursive(visited_rule_names)
 
     @override
+    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.is_nullable(visited_rule_names)
+
+    @override
     def is_terminating(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_terminating(visited_rule_names)
 
@@ -651,6 +704,7 @@ class PositiveOrMoreExpressionBuilder(
             'is not an acceptable base type'
         )
 
+    @override
     def __new__(
         cls,
         expression_builder: ExpressionBuilder[
@@ -695,6 +749,7 @@ class PositiveOrMoreExpressionBuilder(
 class PositiveRepetitionRangeExpressionBuilder(
     ExpressionBuilder[MatchTree, MismatchTree]
 ):
+    @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> PositiveRepetitionRangeExpression:
@@ -703,8 +758,13 @@ class PositiveRepetitionRangeExpressionBuilder(
             self._expression_builder.build(rules=rules), self._start, self._end
         )
 
+    @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_left_recursive(visited_rule_names)
+
+    @override
+    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.is_nullable(visited_rule_names)
 
     @override
     def is_terminating(self, visited_rule_names: set[str], /) -> bool:
@@ -718,6 +778,7 @@ class PositiveRepetitionRangeExpressionBuilder(
             'is not an acceptable base type'
         )
 
+    @override
     def __new__(
         cls,
         expression_builder: ExpressionBuilder[
@@ -793,6 +854,13 @@ class PrioritizedChoiceExpressionBuilder(
         )
 
     @override
+    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+        return any(
+            variant_builder.is_nullable(visited_rule_names)
+            for variant_builder in self._variant_builders
+        )
+
+    @override
     def is_terminating(self, visited_rule_names: set[str], /) -> bool:
         return any(
             variant_builder.is_terminating(visited_rule_names)
@@ -807,6 +875,7 @@ class PrioritizedChoiceExpressionBuilder(
             'is not an acceptable base type'
         )
 
+    @override
     def __new__(
         cls,
         variant_builders: Sequence[ExpressionBuilder[MatchT_co, AnyMismatch]],
@@ -900,6 +969,17 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
         return result
 
     @override
+    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+        if self._name in visited_rule_names:
+            return False
+        visited_rule_names.add(self._name)
+        result = self._expression_builders[self._name].is_nullable(
+            visited_rule_names
+        )
+        visited_rule_names.remove(self._name)
+        return result
+
+    @override
     def is_terminating(self, visited_rule_names: set[str], /) -> bool:
         if self._name in visited_rule_names:
             return False
@@ -918,6 +998,7 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
             'is not an acceptable base type'
         )
 
+    @override
     def __new__(
         cls,
         name: str,
@@ -974,12 +1055,14 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
 
 @final
 class SequenceExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
+    MIN_PROGRESSING_ELEMENT_BUILDERS_COUNT: ClassVar[int] = 1
+
     @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> SequenceExpression:
-        if not any(
-            _is_progressing_expression_builder(element_builder)
+        if all(
+            element_builder.is_nullable(set())
             for element_builder in self._element_builders
         ):
             raise ValueError(self._element_builders)
@@ -1007,6 +1090,10 @@ class SequenceExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
         raise ValueError('Sequence consists of non-left recursive lookaheads.')
 
     @override
+    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+        return False
+
+    @override
     def is_terminating(self, visited_rule_names: set[str], /) -> bool:
         return all(
             element_builder.is_terminating(visited_rule_names)
@@ -1021,6 +1108,7 @@ class SequenceExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
             'is not an acceptable base type'
         )
 
+    @override
     def __new__(
         cls,
         element_builders: Sequence[ExpressionBuilder[AnyMatch, AnyMismatch]],
@@ -1068,6 +1156,10 @@ class ZeroOrMoreExpressionBuilder(
         return self._expression_builder.is_left_recursive(visited_rule_names)
 
     @override
+    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+        return True
+
+    @override
     def is_terminating(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_terminating(visited_rule_names)
 
@@ -1079,6 +1171,7 @@ class ZeroOrMoreExpressionBuilder(
             'is not an acceptable base type'
         )
 
+    @override
     def __new__(
         cls,
         expression_builder: ExpressionBuilder[
@@ -1114,6 +1207,7 @@ class ZeroOrMoreExpressionBuilder(
 class ZeroRepetitionRangeExpressionBuilder(
     ExpressionBuilder[LookaheadMatch | MatchTree, NoMismatch]
 ):
+    @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> ZeroRepetitionRangeExpression:
@@ -1122,8 +1216,13 @@ class ZeroRepetitionRangeExpressionBuilder(
             self._expression_builder.build(rules=rules), self._end
         )
 
+    @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return self._expression_builder.is_left_recursive(visited_rule_names)
+
+    @override
+    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+        return True
 
     @override
     def is_terminating(self, visited_rule_names: set[str], /) -> bool:
@@ -1137,6 +1236,7 @@ class ZeroRepetitionRangeExpressionBuilder(
             'is not an acceptable base type'
         )
 
+    @override
     def __new__(
         cls,
         expression_builder: ExpressionBuilder[
@@ -1181,19 +1281,10 @@ class ZeroRepetitionRangeExpressionBuilder(
 def _check_that_expression_builder_is_progressing(
     value: ExpressionBuilder[Any, Any], /
 ) -> None:
-    if not _is_progressing_expression_builder(value):
+    if value.is_nullable(set()):
         raise ValueError(
             f'Expected progressing expression builder, but got {value!r}.'
         )
-
-
-def _is_progressing_expression_builder(
-    value: ExpressionBuilder[Any, Any], /
-) -> TypeIs[ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]]:
-    return not any(
-        issubclass(match_cls, LookaheadMatch)
-        for match_cls in value.to_match_classes(visited_rule_names=set())
-    )
 
 
 def _validate_expression_builder(value: Any, /) -> None:
