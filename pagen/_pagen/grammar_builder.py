@@ -46,21 +46,23 @@ class GrammarBuilder(Generic[MatchT_co, MismatchT_co]):
                 non_terminating_rules := [
                     name
                     for name, builder in self._expression_builders.items()
-                    if not builder.is_terminating(set())
+                    if not builder.is_terminating(set(), is_leftmost=True)
                 ]
             )
             > 0
         ):
+            non_terminating_rules.sort()
             raise ValueError(
                 'All rules should be terminating, '
-                f'but found: {", ".join(map(repr, non_terminating_rules))}.'
+                'but the following ones are not: '
+                f'{", ".join(map(repr, non_terminating_rules))}.'
             )
-        for name, builder in self._expression_builders.items():
-            expression = builder.build(rules=rules)
-            if builder.is_left_recursive(set()):
-                rules[name] = LeftRecursiveRule(name, expression)
+        for rule_name, expression_builder in self._expression_builders.items():
+            expression = expression_builder.build(rules=rules)
+            if expression_builder.is_left_recursive(set()):
+                rules[rule_name] = LeftRecursiveRule(rule_name, expression)
             else:
-                rules[name] = NonLeftRecursiveRule(name, expression)
+                rules[rule_name] = NonLeftRecursiveRule(rule_name, expression)
         return Grammar(rules)
 
     def get_reference(

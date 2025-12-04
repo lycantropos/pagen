@@ -41,6 +41,10 @@ from .rule import Rule
 
 class ExpressionBuilder(ABC, Generic[MatchT_co, MismatchT_co]):
     @abstractmethod
+    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> Expression[MatchT_co, MismatchT_co]:
@@ -55,7 +59,9 @@ class ExpressionBuilder(ABC, Generic[MatchT_co, MismatchT_co]):
         raise NotImplementedError
 
     @abstractmethod
-    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+    def is_terminating(
+        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+    ) -> bool:
         raise NotImplementedError
 
     def to_match_classes(
@@ -96,6 +102,10 @@ class AnyCharacterExpressionBuilder(
     ExpressionBuilder[MatchLeaf, MismatchLeaf]
 ):
     @override
+    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+        return False
+
+    @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> AnyCharacterExpression:
@@ -110,7 +120,9 @@ class AnyCharacterExpressionBuilder(
         return False
 
     @override
-    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+    def is_terminating(
+        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+    ) -> bool:
         return True
 
     __slots__ = ()
@@ -143,6 +155,10 @@ class CharacterClassExpressionBuilder(
     ExpressionBuilder[MatchLeaf, MismatchLeaf]
 ):
     @override
+    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+        return False
+
+    @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> CharacterClassExpression:
@@ -157,7 +173,9 @@ class CharacterClassExpressionBuilder(
         return False
 
     @override
-    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+    def is_terminating(
+        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+    ) -> bool:
         return True
 
     __slots__ = ('_elements',)
@@ -201,6 +219,10 @@ class ComplementedCharacterClassExpressionBuilder(
     ExpressionBuilder[MatchLeaf, MismatchLeaf]
 ):
     @override
+    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+        return False
+
+    @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> ComplementedCharacterClassExpression:
@@ -215,7 +237,9 @@ class ComplementedCharacterClassExpressionBuilder(
         return False
 
     @override
-    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+    def is_terminating(
+        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+    ) -> bool:
         return True
 
     __slots__ = ('_elements',)
@@ -260,6 +284,10 @@ class ExactRepetitionExpressionBuilder(
     ExpressionBuilder[MatchTree, MismatchTree]
 ):
     @override
+    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.always_matches(visited_rule_names)
+
+    @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> ExactRepetitionExpression:
@@ -277,8 +305,12 @@ class ExactRepetitionExpressionBuilder(
         return False
 
     @override
-    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_terminating(visited_rule_names)
+    def is_terminating(
+        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+    ) -> bool:
+        return self._expression_builder.is_terminating(
+            visited_rule_names, is_leftmost=is_leftmost
+        )
 
     __slots__ = '_count', '_expression_builder'
 
@@ -331,6 +363,10 @@ class ExactRepetitionExpressionBuilder(
 
 class LiteralExpressionBuilder(ExpressionBuilder[MatchLeaf, MismatchLeaf]):
     @override
+    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+        return False
+
+    @override
     def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
         return False
 
@@ -339,7 +375,9 @@ class LiteralExpressionBuilder(ExpressionBuilder[MatchLeaf, MismatchLeaf]):
         return False
 
     @override
-    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+    def is_terminating(
+        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+    ) -> bool:
         return True
 
     __slots__ = ()
@@ -422,6 +460,10 @@ class NegativeLookaheadExpressionBuilder(
     ExpressionBuilder[LookaheadMatch, MismatchTree]
 ):
     @override
+    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.always_matches(visited_rule_names)
+
+    @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> NegativeLookaheadExpression:
@@ -439,8 +481,12 @@ class NegativeLookaheadExpressionBuilder(
         return True
 
     @override
-    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_terminating(visited_rule_names)
+    def is_terminating(
+        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+    ) -> bool:
+        return self._expression_builder.is_terminating(
+            visited_rule_names, is_leftmost=is_leftmost
+        )
 
     __slots__ = ('_expression_builder',)
 
@@ -485,6 +531,10 @@ class NegativeLookaheadExpressionBuilder(
 @final
 class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
     @override
+    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.always_matches(visited_rule_names)
+
+    @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> OneOrMoreExpression:
@@ -500,8 +550,12 @@ class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
         return self._expression_builder.is_nullable(visited_rule_names)
 
     @override
-    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_terminating(visited_rule_names)
+    def is_terminating(
+        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+    ) -> bool:
+        return self._expression_builder.is_terminating(
+            visited_rule_names, is_leftmost=is_leftmost
+        )
 
     __slots__ = ('_expression_builder',)
 
@@ -546,6 +600,10 @@ class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
 @final
 class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch, NoMismatch]):
     @override
+    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+        return True
+
+    @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> OptionalExpression:
@@ -561,8 +619,12 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch, NoMismatch]):
         return True
 
     @override
-    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_terminating(visited_rule_names)
+    def is_terminating(
+        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+    ) -> bool:
+        return not is_leftmost or self._expression_builder.is_terminating(
+            visited_rule_names, is_leftmost=is_leftmost
+        )
 
     __slots__ = ('_expression_builder',)
 
@@ -612,6 +674,10 @@ class PositiveLookaheadExpressionBuilder(
     ExpressionBuilder[LookaheadMatch, MismatchTree]
 ):
     @override
+    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.always_matches(visited_rule_names)
+
+    @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> PositiveLookaheadExpression:
@@ -629,8 +695,12 @@ class PositiveLookaheadExpressionBuilder(
         return True
 
     @override
-    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_terminating(visited_rule_names)
+    def is_terminating(
+        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+    ) -> bool:
+        return self._expression_builder.is_terminating(
+            visited_rule_names, is_leftmost=is_leftmost
+        )
 
     __slots__ = ('_expression_builder',)
 
@@ -676,6 +746,10 @@ class PositiveOrMoreExpressionBuilder(
     ExpressionBuilder[MatchTree, MismatchTree]
 ):
     @override
+    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.always_matches(visited_rule_names)
+
+    @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> PositiveOrMoreExpression:
@@ -693,8 +767,12 @@ class PositiveOrMoreExpressionBuilder(
         return self._expression_builder.is_nullable(visited_rule_names)
 
     @override
-    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_terminating(visited_rule_names)
+    def is_terminating(
+        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+    ) -> bool:
+        return self._expression_builder.is_terminating(
+            visited_rule_names, is_leftmost=is_leftmost
+        )
 
     __slots__ = '_expression_builder', '_start'
 
@@ -750,6 +828,10 @@ class PositiveRepetitionRangeExpressionBuilder(
     ExpressionBuilder[MatchTree, MismatchTree]
 ):
     @override
+    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+        return self._expression_builder.always_matches(visited_rule_names)
+
+    @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> PositiveRepetitionRangeExpression:
@@ -767,8 +849,12 @@ class PositiveRepetitionRangeExpressionBuilder(
         return self._expression_builder.is_nullable(visited_rule_names)
 
     @override
-    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_terminating(visited_rule_names)
+    def is_terminating(
+        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+    ) -> bool:
+        return self._expression_builder.is_terminating(
+            visited_rule_names, is_leftmost=is_leftmost
+        )
 
     __slots__ = '_end', '_expression_builder', '_start'
 
@@ -836,9 +922,31 @@ class PrioritizedChoiceExpressionBuilder(
     ExpressionBuilder[MatchT_co, MismatchTree]
 ):
     @override
+    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+        return any(
+            variant_builder.always_matches(visited_rule_names)
+            for variant_builder in self._variant_builders
+        )
+
+    @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> PrioritizedChoiceExpression[MatchT_co]:
+        if (
+            len(
+                always_matching_variants := [
+                    variant_builder
+                    for variant_builder in self._variant_builders[:-1]
+                    if variant_builder.always_matches(set())
+                ]
+            )
+            > 0
+        ):
+            raise ValueError(
+                'All variants (except maybe last) '
+                'should not be always matching, '
+                f'but got: {", ".join(map(repr, always_matching_variants))}.'
+            )
         return PrioritizedChoiceExpression(
             [
                 variant_builder.build(rules=rules)
@@ -861,9 +969,13 @@ class PrioritizedChoiceExpressionBuilder(
         )
 
     @override
-    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+    def is_terminating(
+        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+    ) -> bool:
         return any(
-            variant_builder.is_terminating(visited_rule_names)
+            variant_builder.is_terminating(
+                visited_rule_names, is_leftmost=is_leftmost
+            )
             for variant_builder in self._variant_builders
         )
 
@@ -921,6 +1033,10 @@ class PrioritizedChoiceExpressionBuilder(
 @final
 class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
     @override
+    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+        return self._resolve().always_matches(visited_rule_names)
+
+    @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> RuleReference[MatchT_co, MismatchT_co]:
@@ -962,9 +1078,7 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
         if self._name in visited_rule_names:
             return True
         visited_rule_names.add(self._name)
-        result = self._expression_builders[self._name].is_left_recursive(
-            visited_rule_names
-        )
+        result = self._resolve().is_left_recursive(visited_rule_names)
         visited_rule_names.remove(self._name)
         return result
 
@@ -973,19 +1087,19 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
         if self._name in visited_rule_names:
             return False
         visited_rule_names.add(self._name)
-        result = self._expression_builders[self._name].is_nullable(
-            visited_rule_names
-        )
+        result = self._resolve().is_nullable(visited_rule_names)
         visited_rule_names.remove(self._name)
         return result
 
     @override
-    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
+    def is_terminating(
+        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+    ) -> bool:
         if self._name in visited_rule_names:
             return False
         visited_rule_names.add(self._name)
-        result = self._expression_builders[self._name].is_terminating(
-            visited_rule_names
+        result = self._resolve().is_terminating(
+            visited_rule_names, is_leftmost=is_leftmost
         )
         visited_rule_names.remove(self._name)
         return result
@@ -1018,6 +1132,9 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
     ]
     _name: str
 
+    def _resolve(self, /) -> ExpressionBuilder[MatchT_co, MismatchT_co]:
+        return self._expression_builders[self._name]
+
     @override
     def _to_match_classes_impl(
         self, /, *, visited_rule_names: set[str]
@@ -1025,7 +1142,7 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
         if self._name in visited_rule_names:
             return
         visited_rule_names.add(self._name)
-        yield from self._expression_builders[self._name].to_match_classes(
+        yield from self._resolve().to_match_classes(
             visited_rule_names=visited_rule_names
         )
         visited_rule_names.remove(self._name)
@@ -1037,7 +1154,7 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
         if self._name in visited_rule_names:
             return
         visited_rule_names.add(self._name)
-        yield from self._expression_builders[self._name].to_mismatch_classes(
+        yield from self._resolve().to_mismatch_classes(
             visited_rule_names=visited_rule_names
         )
         visited_rule_names.remove(self._name)
@@ -1056,6 +1173,10 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
 @final
 class SequenceExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
     MIN_PROGRESSING_ELEMENT_BUILDERS_COUNT: ClassVar[int] = 1
+
+    @override
+    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+        return False
 
     @override
     def build(
@@ -1094,10 +1215,16 @@ class SequenceExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
         return False
 
     @override
-    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
-        return all(
-            element_builder.is_terminating(visited_rule_names)
-            for element_builder in self._element_builders
+    def is_terminating(
+        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+    ) -> bool:
+        return self._element_builders[0].is_terminating(
+            visited_rule_names, is_leftmost=is_leftmost
+        ) and all(
+            element_builder.is_terminating(
+                visited_rule_names, is_leftmost=False
+            )
+            for element_builder in self._element_builders[1:]
         )
 
     __slots__ = ('_element_builders',)
@@ -1143,6 +1270,10 @@ class ZeroOrMoreExpressionBuilder(
     ExpressionBuilder[LookaheadMatch | MatchTree, NoMismatch]
 ):
     @override
+    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+        return True
+
+    @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> ZeroOrMoreExpression:
@@ -1160,8 +1291,12 @@ class ZeroOrMoreExpressionBuilder(
         return True
 
     @override
-    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_terminating(visited_rule_names)
+    def is_terminating(
+        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+    ) -> bool:
+        return not is_leftmost or self._expression_builder.is_terminating(
+            visited_rule_names, is_leftmost=is_leftmost
+        )
 
     __slots__ = ('_expression_builder',)
 
@@ -1208,6 +1343,10 @@ class ZeroRepetitionRangeExpressionBuilder(
     ExpressionBuilder[LookaheadMatch | MatchTree, NoMismatch]
 ):
     @override
+    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+        return True
+
+    @override
     def build(
         self, /, *, rules: Mapping[str, Rule[Any, Any]]
     ) -> ZeroRepetitionRangeExpression:
@@ -1225,8 +1364,10 @@ class ZeroRepetitionRangeExpressionBuilder(
         return True
 
     @override
-    def is_terminating(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_terminating(visited_rule_names)
+    def is_terminating(
+        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+    ) -> bool:
+        return True
 
     __slots__ = '_end', '_expression_builder'
 
