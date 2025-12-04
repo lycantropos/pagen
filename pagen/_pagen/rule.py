@@ -7,7 +7,7 @@ from typing_extensions import Self, override
 
 from .expressions import Expression
 from .match import AnyMatch, MatchT_co
-from .mismatch import AnyMismatch, MismatchLeaf, MismatchT_co, is_mismatch
+from .mismatch import AnyMismatch, MismatchT_co, is_mismatch
 
 
 class Rule(ABC, Generic[MatchT_co, MismatchT_co]):
@@ -73,11 +73,11 @@ class LeftRecursiveRule(Rule[MatchT_co, MismatchT_co]):
         name = self._name if rule_name is None else rule_name
         name_cache = cache.setdefault(name, {})
         if (match := name_cache.get(index)) is not None:
-            assert self.expression.is_valid_mismatch(
+            assert self._expression.is_valid_mismatch(
                 match
-            ) or self.expression.is_valid_match(match), match
+            ) or self._expression.is_valid_match(match), match
             return match
-        name_cache[index] = MismatchLeaf(rule_name, characters='')
+        name_cache[index] = self._expression.to_seed_mismatch(rule_name)
         result = name_cache[index] = self._expression.evaluate(
             text, index, cache=cache, rule_name=name
         )
