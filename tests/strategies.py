@@ -18,9 +18,10 @@ from pagen.models import (
     ExactRepetitionExpressionBuilder,
     ExpressionBuilder,
     GrammarBuilder,
-    LookaheadMatch,
     MatchLeaf,
     MatchTree,
+    MismatchLeaf,
+    MismatchTree,
     NegativeLookaheadExpressionBuilder,
     OneOrMoreExpressionBuilder,
     OptionalExpressionBuilder,
@@ -39,21 +40,22 @@ from pagen.models import (
 )
 
 MAX_EXPRESSION_BUILDER_ELEMENTS_COUNT: Final[int] = 8
+MAX_REPETITION_RANGE_BOUND: Final[int] = 16
 
 
 class ExpressionBuilderCategory(IntEnum):
-    LOOKAHEAD = auto()
+    MAYBE_NON_PROGRESSING = auto()
     PROGRESSING = auto()
 
 
 ExpressionBuilderFactory: TypeAlias = Callable[
     [
-        Mapping[str, ExpressionBuilder[Any]],
+        Mapping[str, ExpressionBuilder[Any, Any]],
         Mapping[ExpressionBuilderCategory, Sequence[str]],
     ],
-    ExpressionBuilder[Any],
+    ExpressionBuilder[Any, Any],
 ]
-LookaheadExpressionBuilder: TypeAlias = (
+MaybeNonProgressingExpressionBuilder: TypeAlias = (
     NegativeLookaheadExpressionBuilder
     | OptionalExpressionBuilder
     | PositiveLookaheadExpressionBuilder
@@ -66,24 +68,16 @@ ProgressingExpressionBuilder: TypeAlias = (
     | PositiveRepetitionRangeExpressionBuilder
     | PositiveOrMoreExpressionBuilder
 )
-LOOKAHEAD_EXPRESSION_BUILDER_CLASSES: Final[
-    Sequence[type[LookaheadExpressionBuilder]]
-] = [
-    NegativeLookaheadExpressionBuilder,
-    OptionalExpressionBuilder,
-    PositiveLookaheadExpressionBuilder,
-    ZeroOrMoreExpressionBuilder,
-]
 
 
-def to_expression_builders_strategy() -> st.SearchStrategy[
-    Mapping[str, ExpressionBuilder[Any]]
-]:
+def to_expression_builders_strategy(
+    *, with_lookahead: bool
+) -> st.SearchStrategy[Mapping[str, ExpressionBuilder[Any, Any]]]:
     def to_categorized_prioritized_choice_expression_builder_factory(
         categorized_offsets: Sequence[tuple[ExpressionBuilderCategory, int]], /
     ) -> tuple[ExpressionBuilderCategory, ExpressionBuilderFactory]:
         def expression_builder_factory(
-            expression_builders: Mapping[str, ExpressionBuilder[Any]],
+            expression_builders: Mapping[str, ExpressionBuilder[Any, Any]],
             categorized_rule_names: Mapping[
                 ExpressionBuilderCategory, Sequence[str]
             ],
@@ -108,7 +102,7 @@ def to_expression_builders_strategy() -> st.SearchStrategy[
                     category is ExpressionBuilderCategory.PROGRESSING
                     for category, _ in categorized_offsets
                 )
-                else ExpressionBuilderCategory.LOOKAHEAD
+                else ExpressionBuilderCategory.MAYBE_NON_PROGRESSING
             ),
             expression_builder_factory,
         )
@@ -128,12 +122,12 @@ def to_expression_builders_strategy() -> st.SearchStrategy[
         assert category is ExpressionBuilderCategory.PROGRESSING, category
 
         def expression_builder_factory(
-            expression_builders: Mapping[str, ExpressionBuilder[Any]],
+            expression_builders: Mapping[str, ExpressionBuilder[Any, Any]],
             categorized_rule_names: Mapping[
                 ExpressionBuilderCategory, Sequence[str]
             ],
             /,
-        ) -> ExpressionBuilder[Any]:
+        ) -> ExpressionBuilder[Any, Any]:
             return expression_builder_cls(
                 RuleReferenceBuilder(
                     categorized_rule_names[category][
@@ -156,7 +150,7 @@ def to_expression_builders_strategy() -> st.SearchStrategy[
         ExpressionBuilderFactory,
     ]:
         def expression_builder_factory(
-            expression_builders: Mapping[str, ExpressionBuilder[Any]],
+            expression_builders: Mapping[str, ExpressionBuilder[Any, Any]],
             categorized_rule_names: Mapping[
                 ExpressionBuilderCategory, Sequence[str]
             ],
@@ -185,20 +179,21 @@ def to_expression_builders_strategy() -> st.SearchStrategy[
         ],
         /,
         *args: Any,
-        expression_builder_cls: type[LookaheadExpressionBuilder],
+        expression_builder_cls: type[MaybeNonProgressingExpressionBuilder],
     ) -> tuple[
-        Literal[ExpressionBuilderCategory.LOOKAHEAD], ExpressionBuilderFactory
+        Literal[ExpressionBuilderCategory.MAYBE_NON_PROGRESSING],
+        ExpressionBuilderFactory,
     ]:
         category, offset = categorized_offset
         assert category is ExpressionBuilderCategory.PROGRESSING, category
 
         def expression_builder_factory(
-            expression_builders: Mapping[str, ExpressionBuilder[Any]],
+            expression_builders: Mapping[str, ExpressionBuilder[Any, Any]],
             categorized_rule_names: Mapping[
                 ExpressionBuilderCategory, Sequence[str]
             ],
             /,
-        ) -> ExpressionBuilder[Any]:
+        ) -> ExpressionBuilder[Any, Any]:
             return expression_builder_cls(
                 RuleReferenceBuilder(
                     categorized_rule_names[category][
@@ -210,7 +205,7 @@ def to_expression_builders_strategy() -> st.SearchStrategy[
             )
 
         return (
-            ExpressionBuilderCategory.LOOKAHEAD,
+            ExpressionBuilderCategory.MAYBE_NON_PROGRESSING,
             expression_builder_factory,
         )
 
@@ -219,8 +214,8 @@ def to_expression_builders_strategy() -> st.SearchStrategy[
             str, tuple[ExpressionBuilderCategory, ExpressionBuilderFactory]
         ],
         /,
-    ) -> Mapping[str, ExpressionBuilder[Any]]:
-        result: dict[str, ExpressionBuilder[Any]] = {}
+    ) -> Mapping[str, ExpressionBuilder[Any, Any]]:
+        result: dict[str, ExpressionBuilder[Any, Any]] = {}
         categorized_rule_names: dict[ExpressionBuilderCategory, list[str]] = {}
         for rule_name, (
             expression_builder_category,
@@ -234,7 +229,7 @@ def to_expression_builders_strategy() -> st.SearchStrategy[
                 is ExpressionBuilderCategory.PROGRESSING
             ):
                 categorized_rule_names.setdefault(
-                    ExpressionBuilderCategory.LOOKAHEAD, []
+                    ExpressionBuilderCategory.MAYBE_NON_PROGRESSING, []
                 ).append(rule_name)
         for rule_name, (
             _,
@@ -254,38 +249,77 @@ def to_expression_builders_strategy() -> st.SearchStrategy[
         st.sampled_from(tuple(ExpressionBuilderCategory)), st.integers(0)
     )
 
-    def to_lookahead_expression_builders(
-        base: st.SearchStrategy[ExpressionBuilder[MatchLeaf | MatchTree]], /
-    ) -> st.SearchStrategy[
-        ExpressionBuilder[LookaheadMatch | MatchLeaf | MatchTree]
-    ]:
-        return st.one_of(
-            [base.map(cls) for cls in LOOKAHEAD_EXPRESSION_BUILDER_CLASSES]
-        )
+    def to_maybe_non_progressing_expression_builders(
+        base: st.SearchStrategy[
+            ExpressionBuilder[
+                MatchLeaf | MatchTree, MismatchLeaf | MismatchTree
+            ]
+        ],
+        /,
+    ) -> st.SearchStrategy[MaybeNonProgressingExpressionBuilder]:
+        variants: list[
+            st.SearchStrategy[MaybeNonProgressingExpressionBuilder]
+        ] = [
+            base.map(OptionalExpressionBuilder),
+            base.map(ZeroOrMoreExpressionBuilder),
+            st.builds(
+                ZeroRepetitionRangeExpressionBuilder,
+                base,
+                st.integers(
+                    ZeroRepetitionRangeExpression.MIN_END,
+                    MAX_REPETITION_RANGE_BOUND,
+                ),
+            ),
+        ]
+        if with_lookahead:
+            variants.extend(
+                [
+                    base.map(NegativeLookaheadExpressionBuilder),
+                    base.map(PositiveLookaheadExpressionBuilder),
+                ]
+            )
+        return st.one_of(variants)
+
+    shared_positive_repetition_range_start_strategy = st.shared(
+        st.integers(
+            PositiveRepetitionRangeExpression.MIN_START,
+            MAX_REPETITION_RANGE_BOUND // 2,
+        ),
+        key='start',
+    )
 
     def extend_progressing_non_recursive_expression_builders(
-        step: st.SearchStrategy[ExpressionBuilder[MatchLeaf | MatchTree]], /
-    ) -> st.SearchStrategy[ExpressionBuilder[MatchLeaf | MatchTree]]:
+        step: st.SearchStrategy[
+            ExpressionBuilder[
+                MatchLeaf | MatchTree, MismatchLeaf | MismatchTree
+            ]
+        ],
+        /,
+    ) -> st.SearchStrategy[
+        ExpressionBuilder[MatchLeaf | MatchTree, MismatchLeaf | MismatchTree]
+    ]:
         prioritized_choice_expression_builder_strategy: st.SearchStrategy[
             PrioritizedChoiceExpressionBuilder[Any]
         ] = st.lists(
             step, min_size=2, max_size=MAX_EXPRESSION_BUILDER_ELEMENTS_COUNT
         ).map(PrioritizedChoiceExpressionBuilder)
-        shared_positive_repetition_range_start_strategy = st.shared(
-            st.integers(PositiveRepetitionRangeExpression.MIN_START),
-            key='start',
-        )
         return st.one_of(
             st.builds(
                 ExactRepetitionExpressionBuilder,
                 step,
-                st.integers(ExactRepetitionExpression.MIN_COUNT),
+                st.integers(
+                    ExactRepetitionExpression.MIN_COUNT,
+                    MAX_REPETITION_RANGE_BOUND,
+                ),
             ),
             step.map(OneOrMoreExpressionBuilder),
             st.builds(
                 PositiveOrMoreExpressionBuilder,
                 step,
-                st.integers(PositiveOrMoreExpression.MIN_START),
+                st.integers(
+                    PositiveOrMoreExpression.MIN_START,
+                    MAX_REPETITION_RANGE_BOUND,
+                ),
             ),
             st.builds(
                 PositiveRepetitionRangeExpressionBuilder,
@@ -294,20 +328,21 @@ def to_expression_builders_strategy() -> st.SearchStrategy[
                 st.builds(
                     add,
                     shared_positive_repetition_range_start_strategy,
-                    st.integers(1),
+                    st.integers(1, MAX_REPETITION_RANGE_BOUND // 2),
                 ),
             ),
             prioritized_choice_expression_builder_strategy,
             (
                 st.lists(
-                    step | to_lookahead_expression_builders(step),
+                    step | to_maybe_non_progressing_expression_builders(step),
                     min_size=2,
                     max_size=MAX_EXPRESSION_BUILDER_ELEMENTS_COUNT,
                 )
                 .filter(
                     lambda element_builders: any(
                         not isinstance(
-                            element_builder, LookaheadExpressionBuilder
+                            element_builder,
+                            MaybeNonProgressingExpressionBuilder,
                         )
                         for element_builder in element_builders
                     )
@@ -353,9 +388,6 @@ def to_expression_builders_strategy() -> st.SearchStrategy[
         extend_progressing_non_recursive_expression_builders,
         max_leaves=3,
     )
-    shared_positive_repetition_range_start_strategy = st.shared(
-        st.integers(PositiveRepetitionRangeExpression.MIN_START), key='start'
-    )
     return (
         st.dictionaries(
             rule_name_strategy,
@@ -367,11 +399,11 @@ def to_expression_builders_strategy() -> st.SearchStrategy[
                             lambda expression_builders, rule_names, /: builder,
                         )
                     ),
-                    to_lookahead_expression_builders(
+                    to_maybe_non_progressing_expression_builders(
                         non_recursive_progressing_expression_builders
                     ).map(
                         lambda builder: (
-                            ExpressionBuilderCategory.LOOKAHEAD,
+                            ExpressionBuilderCategory.MAYBE_NON_PROGRESSING,
                             lambda expression_builders, rule_names, /: builder,
                         )
                     ),
@@ -383,7 +415,10 @@ def to_expression_builders_strategy() -> st.SearchStrategy[
                             ),
                         ),
                         progressing_offset_strategy,
-                        st.integers(ExactRepetitionExpression.MIN_COUNT),
+                        st.integers(
+                            ExactRepetitionExpression.MIN_COUNT,
+                            MAX_REPETITION_RANGE_BOUND,
+                        ),
                     ),
                     progressing_offset_strategy.map(
                         partial(
@@ -399,7 +434,10 @@ def to_expression_builders_strategy() -> st.SearchStrategy[
                             ),
                         ),
                         progressing_offset_strategy,
-                        st.integers(PositiveOrMoreExpression.MIN_START),
+                        st.integers(
+                            PositiveOrMoreExpression.MIN_START,
+                            MAX_REPETITION_RANGE_BOUND,
+                        ),
                     ),
                     st.builds(
                         partial(
@@ -413,29 +451,13 @@ def to_expression_builders_strategy() -> st.SearchStrategy[
                         st.builds(
                             add,
                             shared_positive_repetition_range_start_strategy,
-                            st.integers(1),
+                            st.integers(1, MAX_REPETITION_RANGE_BOUND // 2),
                         ),
                     ),
                     progressing_offset_strategy.map(
                         partial(
                             to_categorized_lookahead_expression_builder,
-                            expression_builder_cls=(
-                                NegativeLookaheadExpressionBuilder
-                            ),
-                        )
-                    ),
-                    progressing_offset_strategy.map(
-                        partial(
-                            to_categorized_lookahead_expression_builder,
                             expression_builder_cls=OptionalExpressionBuilder,
-                        )
-                    ),
-                    progressing_offset_strategy.map(
-                        partial(
-                            to_categorized_lookahead_expression_builder,
-                            expression_builder_cls=(
-                                PositiveLookaheadExpressionBuilder
-                            ),
                         )
                     ),
                     progressing_offset_strategy.map(
@@ -452,7 +474,10 @@ def to_expression_builders_strategy() -> st.SearchStrategy[
                             ),
                         ),
                         progressing_offset_strategy,
-                        st.integers(ZeroRepetitionRangeExpression.MIN_END),
+                        st.integers(
+                            ZeroRepetitionRangeExpression.MIN_END,
+                            MAX_REPETITION_RANGE_BOUND,
+                        ),
                     ),
                     st.lists(
                         any_category_offset_strategy,
@@ -481,6 +506,28 @@ def to_expression_builders_strategy() -> st.SearchStrategy[
                         )
                     ),
                 ]
+                + (
+                    [
+                        progressing_offset_strategy.map(
+                            partial(
+                                to_categorized_lookahead_expression_builder,
+                                expression_builder_cls=(
+                                    NegativeLookaheadExpressionBuilder
+                                ),
+                            )
+                        ),
+                        progressing_offset_strategy.map(
+                            partial(
+                                to_categorized_lookahead_expression_builder,
+                                expression_builder_cls=(
+                                    PositiveLookaheadExpressionBuilder
+                                ),
+                            )
+                        ),
+                    ]
+                    if with_lookahead
+                    else []
+                )
             ),
             min_size=1,
         )
@@ -504,6 +551,6 @@ rule_name_strategy = st.builds(
 )
 string_literal_value_strategy = st.text(min_size=1)
 grammar_builder_strategy = st.builds(
-    GrammarBuilder, to_expression_builders_strategy()
+    GrammarBuilder, to_expression_builders_strategy(with_lookahead=True)
 )
 grammar_strategy = grammar_builder_strategy.map(GrammarBuilder.build)
