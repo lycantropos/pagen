@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Mapping, Sequence
-from operator import methodcaller
+from enum import IntEnum, auto, unique
 from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
@@ -40,8 +40,22 @@ if TYPE_CHECKING:
     from .rule import Rule
 
 
+@unique
+class ExpressionPrecedence(IntEnum):
+    PRIORITIZED_CHOICE = auto()
+    SEQUENCE = auto()
+    REPETITION = auto()
+    LOOKAHEAD = auto()
+    TERM = auto()
+
+
 class Expression(ABC, Generic[MatchT_co, MismatchT_co]):
     __slots__ = ()
+
+    @classmethod
+    @abstractmethod
+    def precedence(cls, /) -> int:
+        raise NotImplementedError
 
     @abstractmethod
     def equals_to(
@@ -82,10 +96,6 @@ class Expression(ABC, Generic[MatchT_co, MismatchT_co]):
         raise NotImplementedError
 
     @abstractmethod
-    def to_nested_str(self, /) -> str:
-        raise NotImplementedError
-
-    @abstractmethod
     def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchT_co:
         raise NotImplementedError
 
@@ -114,6 +124,11 @@ class Expression(ABC, Generic[MatchT_co, MismatchT_co]):
 
 @final
 class AnyCharacterExpression(Expression[MatchLeaf, MismatchLeaf]):
+    @classmethod
+    @override
+    def precedence(cls, /) -> int:
+        return ExpressionPrecedence.TERM
+
     @override
     def equals_to(
         self, other: Expression[Any, Any], /, *, visited_rule_names: set[str]
@@ -145,10 +160,6 @@ class AnyCharacterExpression(Expression[MatchLeaf, MismatchLeaf]):
         yield MismatchLeaf
 
     @override
-    def to_nested_str(self, /) -> str:
-        return self.__str__()
-
-    @override
     def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchLeaf:
         return MismatchLeaf(rule_name, characters='')
 
@@ -172,6 +183,11 @@ class AnyCharacterExpression(Expression[MatchLeaf, MismatchLeaf]):
 @final
 class CharacterClassExpression(Expression[MatchLeaf, MismatchLeaf]):
     MIN_ELEMENTS_COUNT: ClassVar[int] = 1
+
+    @classmethod
+    @override
+    def precedence(cls, /) -> int:
+        return ExpressionPrecedence.TERM
 
     @property
     def elements(self, /) -> Sequence[CharacterRange | CharacterSet]:
@@ -212,10 +228,6 @@ class CharacterClassExpression(Expression[MatchLeaf, MismatchLeaf]):
     @override
     def to_mismatch_classes(self, /) -> Iterable[type[MismatchLeaf]]:
         yield MismatchLeaf
-
-    @override
-    def to_nested_str(self, /) -> str:
-        return self.__str__()
 
     @override
     def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchLeaf:
@@ -259,6 +271,11 @@ class ComplementedCharacterClassExpression(
 ):
     MIN_ELEMENTS_COUNT: ClassVar[int] = 1
 
+    @classmethod
+    @override
+    def precedence(cls, /) -> int:
+        return ExpressionPrecedence.TERM
+
     @property
     def elements(self, /) -> Sequence[CharacterRange | CharacterSet]:
         return self._elements
@@ -300,10 +317,6 @@ class ComplementedCharacterClassExpression(
         yield MismatchLeaf
 
     @override
-    def to_nested_str(self, /) -> str:
-        return self.__str__()
-
-    @override
     def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchLeaf:
         return MismatchLeaf(rule_name, characters='')
 
@@ -342,6 +355,11 @@ class ComplementedCharacterClassExpression(
 @final
 class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
     MIN_COUNT: ClassVar[int] = 2
+
+    @classmethod
+    @override
+    def precedence(cls, /) -> int:
+        return ExpressionPrecedence.REPETITION
 
     @property
     def count(self, /) -> int:
@@ -396,10 +414,6 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
         yield MismatchTree
 
     @override
-    def to_nested_str(self, /) -> str:
-        return f'({self.__str__()})'
-
-    @override
     def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchTree:
         return MismatchTree(
             rule_name, children=[MismatchLeaf(None, characters='')]
@@ -440,11 +454,19 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def __str__(self, /) -> str:
-        return f'{self._expression.to_nested_str()}{{{self._count}}}'
+        expression_str = _to_nested_expression_str(
+            self._expression, parent_precedence=self.precedence()
+        )
+        return f'{expression_str}{{{self._count}}}'
 
 
 class LiteralExpression(Expression[MatchLeaf, MismatchLeaf]):
     MIN_CHARACTERS_COUNT: ClassVar[int] = 1
+
+    @classmethod
+    @override
+    def precedence(cls, /) -> int:
+        return ExpressionPrecedence.TERM
 
     @property
     @abstractmethod
@@ -486,10 +508,6 @@ class LiteralExpression(Expression[MatchLeaf, MismatchLeaf]):
     @override
     def to_mismatch_classes(self, /) -> Iterable[type[MismatchLeaf]]:
         yield MismatchLeaf
-
-    @override
-    def to_nested_str(self, /) -> str:
-        return self.__str__()
 
     @override
     def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchLeaf:
@@ -575,6 +593,11 @@ class SingleQuotedLiteralExpression(LiteralExpression):
 
 @final
 class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchTree]):
+    @classmethod
+    @override
+    def precedence(cls, /) -> int:
+        return ExpressionPrecedence.LOOKAHEAD
+
     @property
     def expression(self, /) -> Expression[MatchLeaf | MatchTree, AnyMismatch]:
         return self._expression
@@ -619,10 +642,6 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchTree]):
         yield MismatchTree
 
     @override
-    def to_nested_str(self, /) -> str:
-        return f'({self.__str__()})'
-
-    @override
     def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchTree:
         return MismatchTree(
             rule_name, children=[MismatchLeaf(None, characters='')]
@@ -653,11 +672,19 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchTree]):
 
     @override
     def __str__(self, /) -> str:
-        return f'!{self._expression.to_nested_str()}'
+        expression_str = _to_nested_expression_str(
+            self._expression, parent_precedence=self.precedence()
+        )
+        return f'!{expression_str}'
 
 
 @final
 class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
+    @classmethod
+    @override
+    def precedence(cls, /) -> int:
+        return ExpressionPrecedence.REPETITION
+
     @property
     def expression(self, /) -> Expression[MatchLeaf | MatchTree, AnyMismatch]:
         return self._expression
@@ -710,10 +737,6 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
         yield MismatchTree
 
     @override
-    def to_nested_str(self, /) -> str:
-        return f'({self.__str__()})'
-
-    @override
     def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchTree:
         return MismatchTree(
             rule_name, children=[MismatchLeaf(None, characters='')]
@@ -744,11 +767,19 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def __str__(self, /) -> str:
-        return f'{self._expression.to_nested_str()}+'
+        expression_str = _to_nested_expression_str(
+            self._expression, parent_precedence=self.precedence()
+        )
+        return f'{expression_str}+'
 
 
 @final
 class OptionalExpression(Expression[AnyMatch, NoMismatch]):
+    @classmethod
+    @override
+    def precedence(cls, /) -> int:
+        return ExpressionPrecedence.REPETITION
+
     @property
     def expression(self, /) -> Expression[MatchLeaf | MatchTree, AnyMismatch]:
         return self._expression
@@ -794,10 +825,6 @@ class OptionalExpression(Expression[AnyMatch, NoMismatch]):
         yield from ()
 
     @override
-    def to_nested_str(self, /) -> str:
-        return f'({self.__str__()})'
-
-    @override
     def to_seed_mismatch(self, rule_name: str | None, /) -> NoMismatch:
         raise ValueError(self)
 
@@ -826,11 +853,19 @@ class OptionalExpression(Expression[AnyMatch, NoMismatch]):
 
     @override
     def __str__(self, /) -> str:
-        return f'{self._expression.to_nested_str()}?'
+        expression_str = _to_nested_expression_str(
+            self._expression, parent_precedence=self.precedence()
+        )
+        return f'{expression_str}?'
 
 
 @final
 class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchTree]):
+    @classmethod
+    @override
+    def precedence(cls, /) -> int:
+        return ExpressionPrecedence.LOOKAHEAD
+
     @property
     def expression(self, /) -> Expression[MatchLeaf | MatchTree, AnyMismatch]:
         return self._expression
@@ -875,10 +910,6 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchTree]):
         yield MismatchTree
 
     @override
-    def to_nested_str(self, /) -> str:
-        return f'({self.__str__()})'
-
-    @override
     def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchTree:
         return MismatchTree(
             rule_name, children=[MismatchLeaf(None, characters='')]
@@ -909,12 +940,20 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchTree]):
 
     @override
     def __str__(self, /) -> str:
-        return f'&{self._expression.to_nested_str()}'
+        expression_str = _to_nested_expression_str(
+            self._expression, parent_precedence=self.precedence()
+        )
+        return f'&{expression_str}'
 
 
 @final
 class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
     MIN_START: ClassVar[int] = 2
+
+    @classmethod
+    @override
+    def precedence(cls, /) -> int:
+        return ExpressionPrecedence.REPETITION
 
     @property
     def expression(self, /) -> Expression[MatchLeaf | MatchTree, AnyMismatch]:
@@ -977,10 +1016,6 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
         yield MismatchTree
 
     @override
-    def to_nested_str(self, /) -> str:
-        return f'({self.__str__()})'
-
-    @override
     def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchTree:
         return MismatchTree(
             rule_name, children=[MismatchLeaf(None, characters='')]
@@ -1021,12 +1056,20 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def __str__(self, /) -> str:
-        return f'{self._expression.to_nested_str()}{{{self._start},}}'
+        expression_str = _to_nested_expression_str(
+            self._expression, parent_precedence=self.precedence()
+        )
+        return f'{expression_str}{{{self._start},}}'
 
 
 @final
 class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
     MIN_START: ClassVar[int] = 1
+
+    @classmethod
+    @override
+    def precedence(cls, /) -> int:
+        return ExpressionPrecedence.REPETITION
 
     @property
     def end(self, /) -> int:
@@ -1097,10 +1140,6 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
         yield MismatchTree
 
     @override
-    def to_nested_str(self, /) -> str:
-        return f'({self.__str__()})'
-
-    @override
     def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchTree:
         return MismatchTree(
             rule_name, children=[MismatchLeaf(None, characters='')]
@@ -1150,13 +1189,19 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def __str__(self, /) -> str:
-        return (
-            f'{self._expression.to_nested_str()}{{{self._start},{self._end}}}'
+        expression_str = _to_nested_expression_str(
+            self._expression, parent_precedence=self.precedence()
         )
+        return f'{expression_str}{{{self._start},{self._end}}}'
 
 
 @final
 class PrioritizedChoiceExpression(Expression[MatchT_co, MismatchTree]):
+    @classmethod
+    @override
+    def precedence(cls, /) -> int:
+        return ExpressionPrecedence.PRIORITIZED_CHOICE
+
     @property
     def variants(self, /) -> Sequence[Expression[MatchT_co, AnyMismatch]]:
         return self._variants
@@ -1211,10 +1256,6 @@ class PrioritizedChoiceExpression(Expression[MatchT_co, MismatchTree]):
         yield MismatchTree
 
     @override
-    def to_nested_str(self, /) -> str:
-        return f'({self.__str__()})'
-
-    @override
     def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchTree:
         return MismatchTree(
             rule_name, children=[MismatchLeaf(None, characters='')]
@@ -1244,15 +1285,22 @@ class PrioritizedChoiceExpression(Expression[MatchT_co, MismatchTree]):
 
     @override
     def __str__(self, /) -> str:
+        parent_precedence = self.precedence()
         return ' / '.join(
-            map(
-                methodcaller(Expression.to_nested_str.__name__), self._variants
+            _to_nested_expression_str(
+                variant, parent_precedence=parent_precedence
             )
+            for variant in self._variants
         )
 
 
 @final
 class RuleReference(Expression[MatchT_co, MismatchT_co]):
+    @classmethod
+    @override
+    def precedence(cls, /) -> int:
+        return ExpressionPrecedence.TERM
+
     @property
     def name(self, /) -> str:
         return self._name
@@ -1302,10 +1350,6 @@ class RuleReference(Expression[MatchT_co, MismatchT_co]):
     @override
     def to_mismatch_classes(self, /) -> Iterable[type[MismatchT_co]]:
         return iter(self._mismatch_classes)
-
-    @override
-    def to_nested_str(self, /) -> str:
-        return self.__str__()
 
     @override
     def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchT_co:
@@ -1368,6 +1412,11 @@ class RuleReference(Expression[MatchT_co, MismatchT_co]):
 
 @final
 class SequenceExpression(Expression[MatchTree, MismatchTree]):
+    @classmethod
+    @override
+    def precedence(cls, /) -> int:
+        return ExpressionPrecedence.SEQUENCE
+
     @property
     def elements(self, /) -> Sequence[Expression[AnyMatch, AnyMismatch]]:
         return self._elements
@@ -1415,7 +1464,7 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
                     continue
                 assert isinstance(element_match, MatchLeaf | MatchTree), (
                     element_match
-                )
+                )  # fmt: skip
                 non_lookahead_matches.append(element_match)
                 index += element_match.characters_count
         assert len(non_lookahead_matches) > 0, non_lookahead_matches
@@ -1427,10 +1476,6 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
 
     def to_mismatch_classes(self, /) -> Iterable[type[MismatchTree]]:
         yield MismatchTree
-
-    @override
-    def to_nested_str(self, /) -> str:
-        return f'({self.__str__()})'
 
     @override
     def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchTree:
@@ -1466,15 +1511,22 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def __str__(self, /) -> str:
+        parent_precedence = self.precedence()
         return ' '.join(
-            map(
-                methodcaller(Expression.to_nested_str.__name__), self._elements
+            _to_nested_expression_str(
+                element, parent_precedence=parent_precedence
             )
+            for element in self._elements
         )
 
 
 @final
 class ZeroOrMoreExpression(Expression[LookaheadMatch | MatchTree, NoMismatch]):
+    @classmethod
+    @override
+    def precedence(cls, /) -> int:
+        return ExpressionPrecedence.REPETITION
+
     @property
     def expression(self, /) -> Expression[MatchLeaf | MatchTree, AnyMismatch]:
         return self._expression
@@ -1526,10 +1578,6 @@ class ZeroOrMoreExpression(Expression[LookaheadMatch | MatchTree, NoMismatch]):
         yield from ()
 
     @override
-    def to_nested_str(self, /) -> str:
-        return f'({self.__str__()})'
-
-    @override
     def to_seed_mismatch(self, rule_name: str | None, /) -> NoMismatch:
         raise ValueError(self)
 
@@ -1558,7 +1606,10 @@ class ZeroOrMoreExpression(Expression[LookaheadMatch | MatchTree, NoMismatch]):
 
     @override
     def __str__(self, /) -> str:
-        return f'{self._expression.to_nested_str()}*'
+        expression_str = _to_nested_expression_str(
+            self._expression, parent_precedence=self.precedence()
+        )
+        return f'{expression_str}*'
 
 
 @final
@@ -1566,6 +1617,11 @@ class ZeroRepetitionRangeExpression(
     Expression[LookaheadMatch | MatchTree, NoMismatch]
 ):
     MIN_END: ClassVar[int] = 2
+
+    @classmethod
+    @override
+    def precedence(cls, /) -> int:
+        return ExpressionPrecedence.REPETITION
 
     @property
     def end(self, /) -> int:
@@ -1628,10 +1684,6 @@ class ZeroRepetitionRangeExpression(
         yield from ()
 
     @override
-    def to_nested_str(self, /) -> str:
-        return f'({self.__str__()})'
-
-    @override
     def to_seed_mismatch(self, rule_name: str | None, /) -> NoMismatch:
         raise ValueError(self)
 
@@ -1671,7 +1723,10 @@ class ZeroRepetitionRangeExpression(
 
     @override
     def __str__(self, /) -> str:
-        return f'{self._expression.to_nested_str()}{{,{self._end}}}'
+        expression_str = _to_nested_expression_str(
+            self._expression, parent_precedence=self.precedence()
+        )
+        return f'{expression_str}{{,{self._end}}}'
 
 
 def _escape_double_quoted_literal_characters(
@@ -1718,6 +1773,14 @@ def _is_progressing_expression(
     return not any(
         issubclass(match_cls, LookaheadMatch)
         for match_cls in value.to_match_classes()
+    )
+
+
+def _to_nested_expression_str(
+    value: Expression[Any, Any], /, *, parent_precedence: int
+) -> str:
+    return (
+        f'({value})' if parent_precedence >= value.precedence() else str(value)
     )
 
 
