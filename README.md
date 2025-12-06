@@ -46,6 +46,7 @@ python -m pip install -e '.'
 
 Let's parse PEG's own grammar
 from [Bryan Ford's original paper](https://bford.info/pub/lang/peg.pdf)
+(with a slight modification to the `Sequence` rule making it non-nullable)
 
 ```python
 >>> from pagen.parsing import is_mismatch, parse_grammar
