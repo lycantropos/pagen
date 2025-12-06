@@ -1034,7 +1034,12 @@ class PrioritizedChoiceExpressionBuilder(
 class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
     @override
     def always_matches(self, visited_rule_names: set[str], /) -> bool:
-        return self._resolve().always_matches(visited_rule_names)
+        if self._name in visited_rule_names:
+            return True
+        visited_rule_names.add(self._name)
+        result = self._resolve().always_matches(visited_rule_names)
+        visited_rule_names.remove(self._name)
+        return result
 
     @override
     def build(
