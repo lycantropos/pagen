@@ -1186,7 +1186,10 @@ class SequenceExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
             element_builder.is_nullable(set())
             for element_builder in self._element_builders
         ):
-            raise ValueError(self._element_builders)
+            raise ValueError(
+                'At least one sequence element should be non-nullable, '
+                f'but got: {", ".join(map(repr, self._element_builders))}.'
+            )
         return SequenceExpression(
             [
                 element_builder.build(rules=rules)
