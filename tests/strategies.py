@@ -302,7 +302,7 @@ def to_expression_builders_strategy(
             PrioritizedChoiceExpressionBuilder[Any]
         ] = st.lists(
             step, min_size=2, max_size=MAX_EXPRESSION_BUILDER_ELEMENTS_COUNT
-        ).map(PrioritizedChoiceExpressionBuilder)
+        ).map(PrioritizedChoiceExpressionBuilder)  # fmt: skip
         return st.one_of(
             st.builds(
                 ExactRepetitionExpressionBuilder,
@@ -553,4 +553,17 @@ string_literal_value_strategy = st.text(min_size=1)
 grammar_builder_strategy = st.builds(
     GrammarBuilder, to_expression_builders_strategy(with_lookahead=True)
 )
-grammar_strategy = grammar_builder_strategy.map(GrammarBuilder.build)
+
+
+def is_valid_grammar_builder(value: GrammarBuilder, /) -> bool:
+    try:
+        value.build()
+    except ValueError:
+        return False
+    else:
+        return True
+
+
+grammar_strategy = grammar_builder_strategy.filter(
+    is_valid_grammar_builder
+).map(GrammarBuilder.build)
