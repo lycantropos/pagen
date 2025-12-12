@@ -52,7 +52,6 @@ from .match import (
 from .mismatch import (
     MismatchLeaf as MismatchLeaf,
     MismatchTree as MismatchTree,
-    is_mismatch as is_mismatch,
 )
 from .parsing import parse_grammar as parse_grammar
 from .rule import (

@@ -5,8 +5,9 @@ from typing import Any, Generic, overload
 
 from typing_extensions import Self, override
 
+from .expressions import is_failure, is_success
 from .match import MatchT_co
-from .mismatch import MismatchT_co, is_mismatch
+from .mismatch import MismatchLeaf, MismatchT_co, MismatchTree
 from .rule import Rule
 
 
@@ -28,15 +29,22 @@ class Grammar(Generic[MatchT_co, MismatchT_co]):
         result = self._rules[starting_rule_name].parse(
             value, 0, cache={}, rule_name=None
         )
-        if is_mismatch(result):
-            raise ValueError(result)
-        if result.characters_count < len(value):
+        if is_failure(result):
             raise ValueError(
-                f'{value[result.characters_count :]!r} '
+                '\n'
+                + '\n'.join(
+                    self._mismatch_to_strings(value, result.mismatch, depth=0)
+                )
+            )
+        assert is_success(result), (starting_rule_name, result)
+        match = result.match
+        if match.characters_count < len(value):
+            raise ValueError(
+                f'{value[match.characters_count :]!r} '
                 'is unprocessed by the parser'
             )
-        assert result.characters_count == len(value), (result, value)
-        return result
+        assert match.characters_count == len(value), (result, value)
+        return match
 
     _rules: Mapping[str, Rule[MatchT_co, MismatchT_co]]
 
@@ -61,3 +69,21 @@ class Grammar(Generic[MatchT_co, MismatchT_co]):
     @override
     def __str__(self, /) -> str:
         return '\n'.join(map(str, self._rules.values()))
+
+    def _mismatch_to_strings(
+        self, text: str, value: MismatchLeaf | MismatchTree, /, *, depth: int
+    ) -> list[str]:
+        unit_space = '  '
+        if isinstance(value, MismatchTree):
+            result = [f'{depth * unit_space}{value.origin_description}:']
+            for child in value.children:
+                result.extend(
+                    self._mismatch_to_strings(text, child, depth=depth + 1)
+                )
+            return result
+        assert isinstance(value, MismatchLeaf)
+        return [
+            f'{depth * unit_space}{value.origin_description}:',
+            f'{(depth + 1) * unit_space}expected {value.expected_message}, '
+            f'got {text[value.start_index : value.stop_index]!r}',
+        ]

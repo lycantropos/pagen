@@ -29,13 +29,7 @@ from .expressions import (
     ZeroRepetitionRangeExpression,
 )
 from .match import AnyMatch, LookaheadMatch, MatchLeaf, MatchT_co, MatchTree
-from .mismatch import (
-    AnyMismatch,
-    MismatchLeaf,
-    MismatchT_co,
-    MismatchTree,
-    NoMismatch,
-)
+from .mismatch import AnyMismatch, MismatchLeaf, MismatchT_co, MismatchTree
 from .rule import Rule
 
 
@@ -457,7 +451,7 @@ class SingleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
 
 @final
 class NegativeLookaheadExpressionBuilder(
-    ExpressionBuilder[LookaheadMatch, MismatchTree]
+    ExpressionBuilder[LookaheadMatch, MismatchLeaf]
 ):
     @override
     def always_matches(self, visited_rule_names: set[str], /) -> bool:
@@ -488,6 +482,20 @@ class NegativeLookaheadExpressionBuilder(
             visited_rule_names, is_leftmost=is_leftmost
         )
 
+    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
+
+    @override
+    def _to_match_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[LookaheadMatch]]:
+        yield LookaheadMatch
+
+    @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MismatchLeaf]]:
+        yield MismatchLeaf
+
     __slots__ = ('_expression_builder',)
 
     def __init_subclass__(cls, /) -> None:
@@ -508,20 +516,6 @@ class NegativeLookaheadExpressionBuilder(
         self = super().__new__(cls)
         self._expression_builder = expression_builder
         return self
-
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
-
-    @override
-    def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[LookaheadMatch]]:
-        yield LookaheadMatch
-
-    @override
-    def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[MismatchTree]]:
-        yield MismatchTree
 
     @override
     def __repr__(self, /) -> str:
@@ -598,7 +592,7 @@ class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
 
 
 @final
-class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch, NoMismatch]):
+class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch, AnyMismatch]):
     @override
     def always_matches(self, visited_rule_names: set[str], /) -> bool:
         return True
@@ -626,6 +620,25 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch, NoMismatch]):
             visited_rule_names, is_leftmost=is_leftmost
         )
 
+    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
+
+    @override
+    def _to_match_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[AnyMatch]]:
+        yield LookaheadMatch
+        yield from self._expression_builder.to_match_classes(
+            visited_rule_names=visited_rule_names
+        )
+
+    @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[AnyMismatch]]:
+        yield from self._expression_builder.to_mismatch_classes(
+            visited_rule_names=visited_rule_names
+        )
+
     __slots__ = ('_expression_builder',)
 
     def __init_subclass__(cls, /) -> None:
@@ -647,23 +660,6 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch, NoMismatch]):
         self._expression_builder = expression_builder
         return self
 
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
-
-    @override
-    def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[AnyMatch]]:
-        yield LookaheadMatch
-        yield from self._expression_builder.to_match_classes(
-            visited_rule_names=visited_rule_names
-        )
-
-    @override
-    def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[NoMismatch]]:
-        yield from ()
-
     @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._expression_builder!r})'
@@ -671,7 +667,7 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch, NoMismatch]):
 
 @final
 class PositiveLookaheadExpressionBuilder(
-    ExpressionBuilder[LookaheadMatch, MismatchTree]
+    ExpressionBuilder[LookaheadMatch, MismatchLeaf]
 ):
     @override
     def always_matches(self, visited_rule_names: set[str], /) -> bool:
@@ -702,6 +698,20 @@ class PositiveLookaheadExpressionBuilder(
             visited_rule_names, is_leftmost=is_leftmost
         )
 
+    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
+
+    @override
+    def _to_match_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[LookaheadMatch]]:
+        yield LookaheadMatch
+
+    @override
+    def _to_mismatch_classes_impl(
+        self, /, *, visited_rule_names: set[str]
+    ) -> Iterable[type[MismatchLeaf]]:
+        yield MismatchLeaf
+
     __slots__ = ('_expression_builder',)
 
     def __init_subclass__(cls, /) -> None:
@@ -721,20 +731,6 @@ class PositiveLookaheadExpressionBuilder(
         self = super().__new__(cls)
         self._expression_builder = expression_builder
         return self
-
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
-
-    @override
-    def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[LookaheadMatch]]:
-        yield LookaheadMatch
-
-    @override
-    def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[MismatchTree]]:
-        yield MismatchTree
 
     @override
     def __repr__(self, /) -> str:
@@ -1166,13 +1162,7 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
 
     @override
     def __repr__(self, /) -> str:
-        return (
-            f'{type(self).__qualname__}'
-            '('
-            f'{self._name!r}, '
-            f'expression_builders={self._expression_builders!r}'
-            ')'
-        )
+        return f'{type(self).__qualname__}({self._name!r})'
 
 
 @final
@@ -1275,7 +1265,7 @@ class SequenceExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
 
 @final
 class ZeroOrMoreExpressionBuilder(
-    ExpressionBuilder[LookaheadMatch | MatchTree, NoMismatch]
+    ExpressionBuilder[LookaheadMatch | MatchTree, AnyMismatch]
 ):
     @override
     def always_matches(self, visited_rule_names: set[str], /) -> bool:
@@ -1339,8 +1329,10 @@ class ZeroOrMoreExpressionBuilder(
     @override
     def _to_mismatch_classes_impl(
         self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[NoMismatch]]:
-        yield from ()
+    ) -> Iterable[type[AnyMismatch]]:
+        yield from self._expression_builder.to_mismatch_classes(
+            visited_rule_names=visited_rule_names
+        )
 
     @override
     def __repr__(self, /) -> str:
@@ -1348,7 +1340,7 @@ class ZeroOrMoreExpressionBuilder(
 
 
 class ZeroRepetitionRangeExpressionBuilder(
-    ExpressionBuilder[LookaheadMatch | MatchTree, NoMismatch]
+    ExpressionBuilder[LookaheadMatch | MatchTree, AnyMismatch]
 ):
     @override
     def always_matches(self, visited_rule_names: set[str], /) -> bool:
@@ -1419,8 +1411,10 @@ class ZeroRepetitionRangeExpressionBuilder(
     @override
     def _to_mismatch_classes_impl(
         self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[NoMismatch]]:
-        yield from ()
+    ) -> Iterable[type[AnyMismatch]]:
+        yield from self._expression_builder.to_mismatch_classes(
+            visited_rule_names=visited_rule_names
+        )
 
     @override
     def __repr__(self, /) -> str:

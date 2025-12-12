@@ -8,6 +8,7 @@ from typing_extensions import Self
 
 @final
 class LookaheadMatch:
+    characters: ClassVar[str] = ''
     characters_count: ClassVar[int] = 0
 
     @property
@@ -114,6 +115,10 @@ class MatchTree:
     MIN_CHILDREN_COUNT: ClassVar[int] = 1
 
     @property
+    def characters(self, /) -> str:
+        return ''.join(child.characters for child in self._children)
+
+    @property
     def characters_count(self, /) -> int:
         return sum(child.characters_count for child in self._children)
 
@@ -196,12 +201,12 @@ class MatchTree:
 AnyMatch: TypeAlias = LookaheadMatch | MatchLeaf | MatchTree
 MatchT_co = TypeVar(
     'MatchT_co',
-    AnyMatch,
-    LookaheadMatch | MatchTree,
     LookaheadMatch,
     MatchLeaf,
-    MatchLeaf | MatchTree,
     MatchTree,
+    LookaheadMatch | MatchTree,
+    MatchLeaf | MatchTree,
+    AnyMatch,
     covariant=True,
 )
 

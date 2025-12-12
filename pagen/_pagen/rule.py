@@ -5,9 +5,9 @@ from typing import Any, Generic, overload
 
 from typing_extensions import Self, override
 
-from .expressions import Expression
+from .expressions import EvaluationResult, Expression
 from .match import AnyMatch, MatchT_co
-from .mismatch import AnyMismatch, MismatchT_co, is_mismatch
+from .mismatch import AnyMismatch, MismatchT_co
 
 
 class Rule(ABC, Generic[MatchT_co, MismatchT_co]):
@@ -30,9 +30,9 @@ class Rule(ABC, Generic[MatchT_co, MismatchT_co]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> MatchT_co | MismatchT_co:
+    ) -> EvaluationResult[MatchT_co, MismatchT_co]:
         raise NotImplementedError
 
     @override
@@ -67,34 +67,37 @@ class LeftRecursiveRule(Rule[MatchT_co, MismatchT_co]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> MatchT_co | MismatchT_co:
+    ) -> EvaluationResult[MatchT_co, MismatchT_co]:
         name = self._name if rule_name is None else rule_name
         name_cache = cache.setdefault(name, {})
-        if (match := name_cache.get(index)) is not None:
-            assert self._expression.is_valid_mismatch(
-                match
-            ) or self._expression.is_valid_match(match), match
-            return match
-        name_cache[index] = self._expression.to_seed_mismatch(rule_name)
+        if (result := name_cache.get(index)) is not None:
+            assert self._expression.is_valid_result(result), (
+                rule_name,
+                result,
+            )
+            return result
+        name_cache[index] = self._expression.to_seed_failure(rule_name)
         result = name_cache[index] = self._expression.evaluate(
             text, index, cache=cache, rule_name=name
         )
-        if is_mismatch(result):
+        result_match = result.match
+        if result_match is None:
             return result
-        last_characters_count = result.characters_count
+        last_characters_count = result_match.characters_count
         while True:
             candidate = self._expression.evaluate(
                 text, index, cache=cache, rule_name=name
             )
+            candidate_match = candidate.match
             if (
-                is_mismatch(candidate)
-                or candidate.characters_count <= last_characters_count
+                candidate_match is None
+                or candidate_match.characters_count <= last_characters_count
             ):
                 break
             result = name_cache[index] = candidate
-            last_characters_count = candidate.characters_count
+            last_characters_count = candidate_match.characters_count
         return result
 
     _expression: Expression[MatchT_co, MismatchT_co]
@@ -153,16 +156,17 @@ class NonLeftRecursiveRule(Rule[MatchT_co, MismatchT_co]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> MatchT_co | MismatchT_co:
+    ) -> EvaluationResult[MatchT_co, MismatchT_co]:
         name = self._name if rule_name is None else rule_name
         name_cache = cache.setdefault(name, {})
-        if (match := name_cache.get(index)) is not None:
-            assert self.expression.is_valid_mismatch(
-                match
-            ) or self.expression.is_valid_match(match), match
-            return match
+        if (result := name_cache.get(index)) is not None:
+            assert self._expression.is_valid_result(result), (
+                rule_name,
+                result,
+            )
+            return result
         result = name_cache[index] = self._expression.evaluate(
             text, index, cache=cache, rule_name=name
         )

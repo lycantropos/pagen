@@ -27,14 +27,7 @@ from .constants import (
     SINGLE_QUOTED_LITERAL_SPECIAL_CHARACTERS,
 )
 from .match import AnyMatch, LookaheadMatch, MatchLeaf, MatchT_co, MatchTree
-from .mismatch import (
-    AnyMismatch,
-    MismatchLeaf,
-    MismatchT_co,
-    MismatchTree,
-    NoMismatch,
-    is_mismatch,
-)
+from .mismatch import AnyMismatch, MismatchLeaf, MismatchT_co, MismatchTree
 
 if TYPE_CHECKING:
     from .rule import Rule
@@ -47,6 +40,80 @@ class ExpressionPrecedence(IntEnum):
     REPETITION = auto()
     LOOKAHEAD = auto()
     TERM = auto()
+
+
+class EvaluationResult(ABC, Generic[MatchT_co, MismatchT_co]):
+    @property
+    @abstractmethod
+    def match(self, /) -> MatchT_co | None:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def mismatch(self, /) -> MismatchT_co | None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def __repr__(self, /) -> str:
+        raise NotImplementedError
+
+
+@final
+class EvaluationSuccess(EvaluationResult[MatchT_co, MismatchT_co]):
+    @property
+    @override
+    def match(self, /) -> MatchT_co:
+        return self._match
+
+    @property
+    @override
+    def mismatch(self, /) -> MismatchT_co | None:
+        return self._mismatch
+
+    _match: MatchT_co
+    _mismatch: MismatchT_co | None
+
+    __slots__ = '_match', '_mismatch'
+
+    def __new__(
+        cls, match: MatchT_co, mismatch: MismatchT_co | None, /
+    ) -> Self:
+        self = super().__new__(cls)
+        self._match, self._mismatch = match, mismatch
+        return self
+
+    @override
+    def __repr__(self, /) -> str:
+        return (
+            f'{type(self).__qualname__}({self._match!r}, {self._mismatch!r})'
+        )
+
+
+@final
+class EvaluationFailure(EvaluationResult[Any, MismatchT_co]):
+    @property
+    @override
+    def match(self, /) -> None:
+        return None
+
+    @property
+    @override
+    def mismatch(self, /) -> MismatchT_co:
+        return self._mismatch
+
+    _mismatch: MismatchT_co
+
+    __slots__ = ('_mismatch',)
+
+    @override
+    def __new__(cls, mismatch: MismatchT_co, /) -> Self:
+        self = super().__new__(cls)
+        self._mismatch = mismatch
+        return self
+
+    @override
+    def __repr__(self, /) -> str:
+        return f'{type(self).__qualname__}({self._mismatch!r})'
 
 
 class Expression(ABC, Generic[MatchT_co, MismatchT_co]):
@@ -70,22 +137,38 @@ class Expression(ABC, Generic[MatchT_co, MismatchT_co]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> MatchT_co | MismatchT_co:
+    ) -> EvaluationResult[MatchT_co, MismatchT_co]:
         raise NotImplementedError
 
-    def is_valid_match(self, value: Any, /) -> TypeGuard[MatchT_co]:
+    def is_valid_match(self, value: AnyMatch, /) -> TypeGuard[MatchT_co]:
         return any(
             isinstance(value, match_cls)
             for match_cls in self.to_match_classes()
         )
 
-    def is_valid_mismatch(self, value: Any, /) -> TypeGuard[MismatchT_co]:
+    def is_valid_mismatch(
+        self, value: AnyMismatch, /
+    ) -> TypeGuard[MismatchT_co]:
         return any(
             isinstance(value, mismatch_cls)
             for mismatch_cls in self.to_mismatch_classes()
         )
+
+    def is_valid_result(
+        self, value: EvaluationResult[Any, Any], /
+    ) -> TypeGuard[EvaluationResult[MatchT_co, MismatchT_co]]:
+        return (
+            (match := value.match) is None or self.is_valid_match(match)
+        ) and (
+            (mismatch := value.mismatch) is None
+            or self.is_valid_mismatch(mismatch)
+        )
+
+    @abstractmethod
+    def to_expected_message(self, /) -> str:
+        raise NotImplementedError
 
     @abstractmethod
     def to_match_classes(self, /) -> Iterable[type[MatchT_co]]:
@@ -96,7 +179,9 @@ class Expression(ABC, Generic[MatchT_co, MismatchT_co]):
         raise NotImplementedError
 
     @abstractmethod
-    def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchT_co:
+    def to_seed_failure(
+        self, rule_name: str | None, /
+    ) -> EvaluationFailure[MismatchT_co]:
         raise NotImplementedError
 
     @overload
@@ -142,14 +227,27 @@ class AnyCharacterExpression(Expression[MatchLeaf, MismatchLeaf]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> MatchLeaf | MismatchLeaf:
+    ) -> EvaluationResult[MatchLeaf, MismatchLeaf]:
         return (
-            MatchLeaf(rule_name, characters=text[index])
+            EvaluationSuccess(
+                MatchLeaf(rule_name, characters=text[index]), None
+            )
             if index < len(text)
-            else MismatchLeaf(rule_name, characters='')
+            else EvaluationFailure(
+                MismatchLeaf(
+                    rule_name or str(self),
+                    expected_message=self.to_expected_message(),
+                    start_index=index,
+                    stop_index=index,
+                )
+            )
         )
+
+    @override
+    def to_expected_message(self, /) -> str:
+        return 'any character'
 
     @override
     def to_match_classes(self, /) -> Iterable[type[MatchLeaf]]:
@@ -160,8 +258,17 @@ class AnyCharacterExpression(Expression[MatchLeaf, MismatchLeaf]):
         yield MismatchLeaf
 
     @override
-    def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchLeaf:
-        return MismatchLeaf(rule_name, characters='')
+    def to_seed_failure(
+        self, rule_name: str | None, /
+    ) -> EvaluationFailure[MismatchLeaf]:
+        return EvaluationFailure(
+            MismatchLeaf(
+                rule_name or str(self),
+                expected_message='',
+                start_index=0,
+                stop_index=0,
+            )
+        )
 
     __slots__ = ()
 
@@ -209,17 +316,35 @@ class CharacterClassExpression(Expression[MatchLeaf, MismatchLeaf]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> MatchLeaf | MismatchLeaf:
+    ) -> EvaluationResult[MatchLeaf, MismatchLeaf]:
         if index >= len(text):
-            return MismatchLeaf(rule_name, characters='')
+            return EvaluationFailure(
+                MismatchLeaf(
+                    rule_name or str(self),
+                    expected_message=self.to_expected_message(),
+                    start_index=index,
+                    stop_index=index,
+                )
+            )
         character = text[index]
         return (
-            MatchLeaf(rule_name, characters=character)
+            EvaluationSuccess(MatchLeaf(rule_name, characters=character), None)
             if any(character in element for element in self._elements)
-            else MismatchLeaf(rule_name, characters=character)
+            else EvaluationFailure(
+                MismatchLeaf(
+                    rule_name or str(self),
+                    expected_message=self.to_expected_message(),
+                    start_index=index,
+                    stop_index=index + 1,
+                )
+            )
         )
+
+    @override
+    def to_expected_message(self, /) -> str:
+        return f'a character from {self}'
 
     @override
     def to_match_classes(self, /) -> Iterable[type[MatchLeaf]]:
@@ -230,8 +355,17 @@ class CharacterClassExpression(Expression[MatchLeaf, MismatchLeaf]):
         yield MismatchLeaf
 
     @override
-    def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchLeaf:
-        return MismatchLeaf(rule_name, characters='')
+    def to_seed_failure(
+        self, rule_name: str | None, /
+    ) -> EvaluationFailure[MismatchLeaf]:
+        return EvaluationFailure(
+            MismatchLeaf(
+                rule_name or str(self),
+                expected_message='',
+                start_index=0,
+                stop_index=0,
+            )
+        )
 
     __slots__ = ('_elements',)
 
@@ -296,17 +430,35 @@ class ComplementedCharacterClassExpression(
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> MatchLeaf | MismatchLeaf:
+    ) -> EvaluationResult[MatchLeaf, MismatchLeaf]:
         if index >= len(text):
-            return MismatchLeaf(rule_name, characters='')
+            return EvaluationFailure(
+                MismatchLeaf(
+                    rule_name or str(self),
+                    expected_message=self.to_expected_message(),
+                    start_index=index,
+                    stop_index=index,
+                )
+            )
         character = text[index]
         return (
-            MatchLeaf(rule_name, characters=character)
+            EvaluationSuccess(MatchLeaf(rule_name, characters=character), None)
             if all(character not in element for element in self._elements)
-            else MismatchLeaf(rule_name, characters=character)
+            else EvaluationFailure(
+                MismatchLeaf(
+                    rule_name or str(self),
+                    expected_message=self.to_expected_message(),
+                    start_index=index,
+                    stop_index=index + 1,
+                )
+            )
         )
+
+    @override
+    def to_expected_message(self, /) -> str:
+        return f'a character from {self}'
 
     @override
     def to_match_classes(self, /) -> Iterable[type[MatchLeaf]]:
@@ -317,8 +469,17 @@ class ComplementedCharacterClassExpression(
         yield MismatchLeaf
 
     @override
-    def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchLeaf:
-        return MismatchLeaf(rule_name, characters='')
+    def to_seed_failure(
+        self, rule_name: str | None, /
+    ) -> EvaluationFailure[MismatchLeaf]:
+        return EvaluationFailure(
+            MismatchLeaf(
+                rule_name or str(self),
+                expected_message='',
+                start_index=0,
+                stop_index=0,
+            )
+        )
 
     __slots__ = ('_elements',)
 
@@ -388,22 +549,38 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> MatchTree | MismatchTree:
+    ) -> EvaluationResult[MatchTree, MismatchTree]:
         children: list[MatchLeaf | MatchTree] = []
         expression = self._expression
         for _ in range(self._count):
-            match = expression.evaluate(
+            result = expression.evaluate(
                 text, index, cache=cache, rule_name=None
             )
-            if is_mismatch(match):
-                return MismatchTree(rule_name, children=[*children, match])
-            else:
-                assert isinstance(match, MatchLeaf | MatchTree)
+            if (match := result.match) is not None:
+                assert isinstance(match, MatchLeaf | MatchTree), (
+                    rule_name,
+                    children,
+                    result,
+                )
                 children.append(match)
                 index += match.characters_count
-        return MatchTree(rule_name, children=children)
+            else:
+                assert is_failure(result), (rule_name, children, result)
+                return EvaluationFailure(
+                    MismatchTree(
+                        rule_name or str(self), children=[result.mismatch]
+                    )
+                )
+        return EvaluationSuccess(MatchTree(rule_name, children=children), None)
+
+    @override
+    def to_expected_message(self, /) -> str:
+        return (
+            f'{self._expression.to_expected_message()} '
+            f'repeated {self._count} times'
+        )
 
     @override
     def to_match_classes(self, /) -> Iterable[type[MatchTree]]:
@@ -414,9 +591,21 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
         yield MismatchTree
 
     @override
-    def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchTree:
-        return MismatchTree(
-            rule_name, children=[MismatchLeaf(None, characters='')]
+    def to_seed_failure(
+        self, rule_name: str | None, /
+    ) -> EvaluationFailure[MismatchTree]:
+        return EvaluationFailure(
+            MismatchTree(
+                rule_name or str(self),
+                children=[
+                    MismatchLeaf(
+                        str(self._expression),
+                        expected_message='',
+                        start_index=0,
+                        stop_index=0,
+                    )
+                ],
+            )
         )
 
     __slots__ = '_count', '_expression'
@@ -489,17 +678,27 @@ class LiteralExpression(Expression[MatchLeaf, MismatchLeaf]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> MatchLeaf | MismatchLeaf:
+    ) -> EvaluationResult[MatchLeaf, MismatchLeaf]:
         return (
-            MismatchLeaf(rule_name, characters=characters)
-            if (
-                (characters := text[index : index + len(self.characters)])
-                != self.characters
+            EvaluationFailure(
+                MismatchLeaf(
+                    rule_name or str(self),
+                    expected_message=self.to_expected_message(),
+                    start_index=index,
+                    stop_index=index + 1,
+                )
             )
-            else MatchLeaf(rule_name, characters=self.characters)
+            if text[index : index + len(self.characters)] != self.characters
+            else EvaluationSuccess(
+                MatchLeaf(rule_name, characters=self.characters), None
+            )
         )
+
+    @override
+    def to_expected_message(self, /) -> str:
+        return repr(self.characters)
 
     @override
     def to_match_classes(self, /) -> Iterable[type[MatchLeaf]]:
@@ -510,8 +709,17 @@ class LiteralExpression(Expression[MatchLeaf, MismatchLeaf]):
         yield MismatchLeaf
 
     @override
-    def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchLeaf:
-        return MismatchLeaf(rule_name, characters='')
+    def to_seed_failure(
+        self, rule_name: str | None, /
+    ) -> EvaluationFailure[MismatchLeaf]:
+        return EvaluationFailure(
+            MismatchLeaf(
+                rule_name or str(self),
+                expected_message='',
+                start_index=0,
+                stop_index=0,
+            )
+        )
 
     __slots__ = ()
 
@@ -592,7 +800,7 @@ class SingleQuotedLiteralExpression(LiteralExpression):
 
 
 @final
-class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchTree]):
+class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
     @classmethod
     @override
     def precedence(cls, /) -> int:
@@ -620,31 +828,47 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchTree]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> LookaheadMatch | MismatchTree:
-        return (
-            MismatchTree(rule_name, children=[match])
-            if not is_mismatch(
-                match := self._expression.evaluate(
-                    text, index, cache=cache, rule_name=None
+    ) -> EvaluationResult[LookaheadMatch, MismatchLeaf]:
+        result = self._expression.evaluate(
+            text, index, cache=cache, rule_name=None
+        )
+        if is_success(result):
+            return EvaluationFailure(
+                MismatchLeaf(
+                    rule_name or str(self),
+                    expected_message=self.to_expected_message(),
+                    start_index=index,
+                    stop_index=index + result.match.characters_count,
                 )
             )
-            else LookaheadMatch(rule_name)
-        )
+        assert is_failure(result), (rule_name, result)
+        return EvaluationSuccess(LookaheadMatch(rule_name), result.mismatch)
+
+    @override
+    def to_expected_message(self, /) -> str:
+        return f'not {self._expression.to_expected_message()}'
 
     @override
     def to_match_classes(self, /) -> Iterable[type[LookaheadMatch]]:
         yield LookaheadMatch
 
     @override
-    def to_mismatch_classes(self, /) -> Iterable[type[MismatchTree]]:
-        yield MismatchTree
+    def to_mismatch_classes(self, /) -> Iterable[type[MismatchLeaf]]:
+        yield MismatchLeaf
 
     @override
-    def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchTree:
-        return MismatchTree(
-            rule_name, children=[MismatchLeaf(None, characters='')]
+    def to_seed_failure(
+        self, rule_name: str | None, /
+    ) -> EvaluationFailure[MismatchLeaf]:
+        return EvaluationFailure(
+            MismatchLeaf(
+                rule_name or str(self),
+                expected_message='',
+                start_index=0,
+                stop_index=0,
+            )
         )
 
     __slots__ = ('_expression',)
@@ -707,27 +931,52 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> MatchTree | MismatchTree:
+    ) -> EvaluationResult[MatchTree, MismatchTree]:
         expression = self._expression
-        first_match = expression.evaluate(
+        first_result = expression.evaluate(
             text, index, cache=cache, rule_name=None
         )
-        if is_mismatch(first_match):
-            return MismatchTree(rule_name, children=[first_match])
-        else:
-            children: list[MatchLeaf | MatchTree] = [first_match]
+        matches: list[MatchLeaf | MatchTree]
+        if is_success(first_result):
+            first_match = first_result.match
+            assert isinstance(first_match, MatchLeaf | MatchTree), (
+                rule_name,
+                first_result,
+            )
+            matches = [first_match]
             index += first_match.characters_count
-        while not is_mismatch(
-            match := expression.evaluate(
+        else:
+            assert is_failure(first_result), (rule_name, first_result)
+            return EvaluationFailure(
+                MismatchTree(
+                    rule_name or str(self), children=[first_result.mismatch]
+                )
+            )
+        while is_success(
+            result := expression.evaluate(
                 text, index, cache=cache, rule_name=None
             )
         ):
-            assert isinstance(match, MatchLeaf | MatchTree)
-            children.append(match)
+            match = result.match
+            matches.append(match)
+            assert isinstance(match, MatchLeaf | MatchTree), (
+                rule_name,
+                result,
+            )
             index += match.characters_count
-        return MatchTree(rule_name, children=children)
+        assert is_failure(result), (rule_name, result)
+        return EvaluationSuccess(
+            MatchTree(rule_name, children=matches),
+            MismatchTree(rule_name or str(self), children=[result.mismatch]),
+        )
+
+    @override
+    def to_expected_message(self, /) -> str:
+        return (
+            f'{self._expression.to_expected_message()} repeated at least once'
+        )
 
     @override
     def to_match_classes(self, /) -> Iterable[type[MatchTree]]:
@@ -737,9 +986,21 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
         yield MismatchTree
 
     @override
-    def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchTree:
-        return MismatchTree(
-            rule_name, children=[MismatchLeaf(None, characters='')]
+    def to_seed_failure(
+        self, rule_name: str | None, /
+    ) -> EvaluationFailure[MismatchTree]:
+        return EvaluationFailure(
+            MismatchTree(
+                rule_name or str(self),
+                children=[
+                    MismatchLeaf(
+                        str(self._expression),
+                        expected_message='',
+                        start_index=0,
+                        stop_index=0,
+                    )
+                ],
+            )
         )
 
     __slots__ = ('_expression',)
@@ -774,7 +1035,7 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
 
 
 @final
-class OptionalExpression(Expression[AnyMatch, NoMismatch]):
+class OptionalExpression(Expression[AnyMatch, AnyMismatch]):
     @classmethod
     @override
     def precedence(cls, /) -> int:
@@ -802,17 +1063,20 @@ class OptionalExpression(Expression[AnyMatch, NoMismatch]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> AnyMatch | NoMismatch:
+    ) -> EvaluationSuccess[AnyMatch, AnyMismatch]:
+        result = self._expression.evaluate(
+            text, index, cache=cache, rule_name=rule_name
+        )
+        if is_success(result):
+            return result
+        assert is_failure(result), (rule_name, result)
+        return EvaluationSuccess(LookaheadMatch(rule_name), result.mismatch)
+
+    def to_expected_message(self, /) -> str:
         return (
-            result
-            if not is_mismatch(
-                result := self._expression.evaluate(
-                    text, index, cache=cache, rule_name=rule_name
-                )
-            )
-            else LookaheadMatch(rule_name)
+            f'{self._expression.to_expected_message()} repeated at most once'
         )
 
     @override
@@ -821,11 +1085,13 @@ class OptionalExpression(Expression[AnyMatch, NoMismatch]):
         yield from self._expression.to_match_classes()
 
     @override
-    def to_mismatch_classes(self, /) -> Iterable[type[NoMismatch]]:
-        yield from ()
+    def to_mismatch_classes(self, /) -> Iterable[type[AnyMismatch]]:
+        yield from self._expression.to_mismatch_classes()
 
     @override
-    def to_seed_mismatch(self, rule_name: str | None, /) -> NoMismatch:
+    def to_seed_failure(
+        self, rule_name: str | None, /
+    ) -> EvaluationFailure[AnyMismatch]:
         raise ValueError(self)
 
     __slots__ = ('_expression',)
@@ -860,7 +1126,7 @@ class OptionalExpression(Expression[AnyMatch, NoMismatch]):
 
 
 @final
-class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchTree]):
+class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
     @classmethod
     @override
     def precedence(cls, /) -> int:
@@ -888,31 +1154,47 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchTree]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> LookaheadMatch | MismatchTree:
-        return (
-            MismatchTree(rule_name, children=[match])
-            if is_mismatch(
-                match := self._expression.evaluate(
-                    text, index, cache=cache, rule_name=None
+    ) -> EvaluationResult[LookaheadMatch, MismatchLeaf]:
+        result = self._expression.evaluate(
+            text, index, cache=cache, rule_name=None
+        )
+        if is_failure(result):
+            assert result.mismatch.start_index == index, (rule_name, result)
+            return EvaluationFailure(
+                MismatchLeaf(
+                    rule_name or str(self),
+                    expected_message=self.to_expected_message(),
+                    start_index=index,
+                    stop_index=result.mismatch.stop_index,
                 )
             )
-            else LookaheadMatch(rule_name)
-        )
+        return EvaluationSuccess(LookaheadMatch(rule_name), None)
+
+    @override
+    def to_expected_message(self, /) -> str:
+        return self._expression.to_expected_message()
 
     @override
     def to_match_classes(self, /) -> Iterable[type[LookaheadMatch]]:
         yield LookaheadMatch
 
     @override
-    def to_mismatch_classes(self, /) -> Iterable[type[MismatchTree]]:
-        yield MismatchTree
+    def to_mismatch_classes(self, /) -> Iterable[type[MismatchLeaf]]:
+        yield MismatchLeaf
 
     @override
-    def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchTree:
-        return MismatchTree(
-            rule_name, children=[MismatchLeaf(None, characters='')]
+    def to_seed_failure(
+        self, rule_name: str | None, /
+    ) -> EvaluationFailure[MismatchLeaf]:
+        return EvaluationFailure(
+            MismatchLeaf(
+                rule_name or str(self),
+                expected_message='',
+                start_index=0,
+                stop_index=0,
+            )
         )
 
     __slots__ = ('_expression',)
@@ -982,30 +1264,48 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> MatchTree | MismatchTree:
+    ) -> EvaluationResult[MatchTree, MismatchTree]:
         children: list[MatchLeaf | MatchTree] = []
         expression = self._expression
         for _ in range(self._start):
-            match = expression.evaluate(
+            result = expression.evaluate(
                 text, index, cache=cache, rule_name=None
             )
-            if is_mismatch(match):
-                return MismatchTree(rule_name, children=[*children, match])
-            else:
+            if (match := result.match) is not None:
                 assert isinstance(match, MatchLeaf | MatchTree)
                 children.append(match)
                 index += match.characters_count
-        while not is_mismatch(
-            match := expression.evaluate(
+            else:
+                assert is_failure(result), (rule_name, result)
+                return EvaluationFailure(
+                    MismatchTree(
+                        rule_name or str(self), children=[result.mismatch]
+                    )
+                )
+        while not is_failure(
+            result := expression.evaluate(
                 text, index, cache=cache, rule_name=None
             )
         ):
-            assert isinstance(match, MatchLeaf | MatchTree)
+            match = result.match
+            assert isinstance(match, MatchLeaf | MatchTree), (
+                rule_name,
+                result,
+            )
             children.append(match)
             index += match.characters_count
-        return MatchTree(rule_name, children=children)
+        return EvaluationSuccess(
+            MatchTree(rule_name, children=children), result.mismatch
+        )
+
+    @override
+    def to_expected_message(self, /) -> str:
+        return (
+            f'{self._expression.to_expected_message()} '
+            f'repeated at least {self._start} times'
+        )
 
     @override
     def to_match_classes(self, /) -> Iterable[type[MatchTree]]:
@@ -1016,9 +1316,21 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
         yield MismatchTree
 
     @override
-    def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchTree:
-        return MismatchTree(
-            rule_name, children=[MismatchLeaf(None, characters='')]
+    def to_seed_failure(
+        self, rule_name: str | None, /
+    ) -> EvaluationFailure[MismatchTree]:
+        return EvaluationFailure(
+            MismatchTree(
+                rule_name or str(self),
+                children=[
+                    MismatchLeaf(
+                        str(self._expression),
+                        expected_message='',
+                        start_index=0,
+                        stop_index=0,
+                    )
+                ],
+            )
         )
 
     __slots__ = '_expression', '_start'
@@ -1103,33 +1415,58 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> MatchTree | MismatchTree:
-        children: list[MatchLeaf | MatchTree] = []
+    ) -> EvaluationResult[MatchTree, MismatchTree]:
+        matches: list[MatchLeaf | MatchTree] = []
         expression = self._expression
         for _ in range(self._start):
-            match = expression.evaluate(
+            result = expression.evaluate(
                 text, index, cache=cache, rule_name=None
             )
-            if is_mismatch(match):
-                return MismatchTree(rule_name, children=[*children, match])
-            else:
+            if is_success(result):
+                match = result.match
                 assert isinstance(match, MatchLeaf | MatchTree)
-                children.append(match)
+                matches.append(match)
                 index += match.characters_count
-        for _ in range(self._start, self._end):
-            if not is_mismatch(
-                match := expression.evaluate(
-                    text, index, cache=cache, rule_name=None
+            else:
+                assert is_failure(result), (rule_name, result)
+                return EvaluationFailure(
+                    MismatchTree(
+                        rule_name or str(self), children=[result.mismatch]
+                    )
                 )
-            ):
+        final_mismatch: AnyMismatch | None = None
+        for _ in range(self._start, self._end):
+            result = expression.evaluate(
+                text, index, cache=cache, rule_name=None
+            )
+            assert self.is_valid_result(result)
+            if is_success(result):
+                match = result.match
                 assert isinstance(match, MatchLeaf | MatchTree)
-                children.append(match)
+                matches.append(match)
                 index += match.characters_count
             else:
+                final_mismatch = result.mismatch
                 break
-        return MatchTree(rule_name, children=children)
+        return EvaluationSuccess(
+            MatchTree(rule_name, children=matches),
+            (
+                None
+                if final_mismatch is None
+                else MismatchTree(
+                    rule_name or str(self), children=[final_mismatch]
+                )
+            ),
+        )
+
+    @override
+    def to_expected_message(self, /) -> str:
+        return (
+            f'{self._expression.to_expected_message()} '
+            f'repeated from {self._start} to {self._end} times'
+        )
 
     @override
     def to_match_classes(self, /) -> Iterable[type[MatchTree]]:
@@ -1140,9 +1477,21 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
         yield MismatchTree
 
     @override
-    def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchTree:
-        return MismatchTree(
-            rule_name, children=[MismatchLeaf(None, characters='')]
+    def to_seed_failure(
+        self, rule_name: str | None, /
+    ) -> EvaluationFailure[MismatchTree]:
+        return EvaluationFailure(
+            MismatchTree(
+                rule_name or str(self),
+                children=[
+                    MismatchLeaf(
+                        str(self._expression),
+                        expected_message='',
+                        start_index=0,
+                        stop_index=0,
+                    )
+                ],
+            )
         )
 
     __slots__ = '_end', '_expression', '_start'
@@ -1232,19 +1581,28 @@ class PrioritizedChoiceExpression(Expression[MatchT_co, MismatchTree]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> MatchT_co | MismatchTree:
-        variant_mismatches = []
+    ) -> EvaluationResult[MatchT_co, MismatchTree]:
+        variant_mismatches: list[AnyMismatch] = []
         for variant in self._variants:
-            variant_match = variant.evaluate(
+            variant_result = variant.evaluate(
                 text, index, cache=cache, rule_name=rule_name
             )
-            if is_mismatch(variant_match):
-                variant_mismatches.append(variant_match)
+            if is_success(variant_result):
+                return variant_result
             else:
-                return variant_match
-        return MismatchTree(rule_name, children=variant_mismatches)
+                assert is_failure(variant_result), (rule_name, variant_result)
+                variant_mismatches.append(variant_result.mismatch)
+        return EvaluationFailure(
+            MismatchTree(rule_name or str(self), children=variant_mismatches)
+        )
+
+    @override
+    def to_expected_message(self, /) -> str:
+        return ' or '.join(
+            variant.to_expected_message() for variant in self._variants
+        )
 
     @override
     def to_match_classes(self, /) -> Iterable[type[MatchT_co]]:
@@ -1256,9 +1614,21 @@ class PrioritizedChoiceExpression(Expression[MatchT_co, MismatchTree]):
         yield MismatchTree
 
     @override
-    def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchTree:
-        return MismatchTree(
-            rule_name, children=[MismatchLeaf(None, characters='')]
+    def to_seed_failure(
+        self, rule_name: str | None, /
+    ) -> EvaluationFailure[MismatchTree]:
+        return EvaluationFailure(
+            MismatchTree(
+                rule_name or str(self),
+                children=[
+                    MismatchLeaf(
+                        str(self._variants[0]),
+                        expected_message='',
+                        start_index=0,
+                        stop_index=0,
+                    )
+                ],
+            )
         )
 
     __slots__ = ('_variants',)
@@ -1333,15 +1703,19 @@ class RuleReference(Expression[MatchT_co, MismatchT_co]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> MatchT_co | MismatchT_co:
+    ) -> EvaluationResult[MatchT_co, MismatchT_co]:
         return self.resolve().parse(
             text, index, cache=cache, rule_name=self._name
         )
 
     def resolve(self, /) -> Rule[MatchT_co, MismatchT_co]:
         return self._rules[self._referent_name]
+
+    @override
+    def to_expected_message(self, /) -> str:
+        return self.resolve().expression.to_expected_message()
 
     @override
     def to_match_classes(self) -> Iterable[type[MatchT_co]]:
@@ -1352,8 +1726,10 @@ class RuleReference(Expression[MatchT_co, MismatchT_co]):
         return iter(self._mismatch_classes)
 
     @override
-    def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchT_co:
-        return self.resolve().expression.to_seed_mismatch(rule_name)  # type: ignore[misc]
+    def to_seed_failure(
+        self, rule_name: str | None, /
+    ) -> EvaluationFailure[MismatchT_co]:
+        return self.resolve().expression.to_seed_failure(rule_name)
 
     __slots__ = (
         '_match_classes',
@@ -1447,28 +1823,67 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> MatchTree | MismatchTree:
-        non_lookahead_matches: list[MatchLeaf | MatchTree] = []
+    ) -> EvaluationResult[MatchTree, MismatchTree]:
+        element_successes: list[EvaluationSuccess[AnyMatch, AnyMismatch]] = []
         for element in self._elements:
-            element_match = element.evaluate(
+            element_result = element.evaluate(
                 text, index, cache=cache, rule_name=None
             )
-            if is_mismatch(element_match):
-                return MismatchTree(
-                    rule_name, children=[*non_lookahead_matches, element_match]
-                )
-            else:
+            if is_success(element_result):
+                element_successes.append(element_result)
+                element_match = element_result.match
                 if isinstance(element_match, LookaheadMatch):
                     continue
                 assert isinstance(element_match, MatchLeaf | MatchTree), (
                     element_match
                 )  # fmt: skip
-                non_lookahead_matches.append(element_match)
                 index += element_match.characters_count
-        assert len(non_lookahead_matches) > 0, non_lookahead_matches
-        return MatchTree(rule_name, children=non_lookahead_matches)
+            else:
+                assert is_failure(element_result), (rule_name, element_result)
+                element_mismatch = element_result.mismatch
+                return EvaluationFailure(
+                    MismatchTree(
+                        rule_name or str(self),
+                        children=[
+                            *[
+                                prev_element_mismatch
+                                for prev_element_success in element_successes
+                                if (
+                                    (
+                                        prev_element_mismatch := (
+                                            prev_element_success.mismatch
+                                        )
+                                    )
+                                    is not None
+                                )
+                                and (
+                                    prev_element_mismatch.stop_index
+                                    == element_mismatch.stop_index
+                                )
+                            ],
+                            element_mismatch,
+                        ],
+                    )
+                )
+        return EvaluationSuccess(
+            MatchTree(
+                rule_name,
+                children=[
+                    element_success.match
+                    for element_success in element_successes
+                    if not isinstance(element_success.match, LookaheadMatch)
+                ],
+            ),
+            None,
+        )
+
+    @override
+    def to_expected_message(self, /) -> str:
+        return ' followed by '.join(
+            element.to_expected_message() for element in self._elements
+        )
 
     @override
     def to_match_classes(self, /) -> Iterable[type[MatchTree]]:
@@ -1478,9 +1893,21 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
         yield MismatchTree
 
     @override
-    def to_seed_mismatch(self, rule_name: str | None, /) -> MismatchTree:
-        return MismatchTree(
-            rule_name, children=[MismatchLeaf(None, characters='')]
+    def to_seed_failure(
+        self, rule_name: str | None, /
+    ) -> EvaluationFailure[MismatchTree]:
+        return EvaluationFailure(
+            MismatchTree(
+                rule_name or str(self),
+                children=[
+                    MismatchLeaf(
+                        str(self._elements[0]),
+                        expected_message='',
+                        start_index=0,
+                        stop_index=0,
+                    )
+                ],
+            )
         )
 
     __slots__ = ('_elements',)
@@ -1521,7 +1948,9 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
 
 
 @final
-class ZeroOrMoreExpression(Expression[LookaheadMatch | MatchTree, NoMismatch]):
+class ZeroOrMoreExpression(
+    Expression[LookaheadMatch | MatchTree, MismatchTree]
+):
     @classmethod
     @override
     def precedence(cls, /) -> int:
@@ -1549,22 +1978,39 @@ class ZeroOrMoreExpression(Expression[LookaheadMatch | MatchTree, NoMismatch]):
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> LookaheadMatch | MatchTree:
-        children: list[MatchLeaf | MatchTree] = []
+    ) -> EvaluationSuccess[LookaheadMatch | MatchTree, MismatchTree]:
+        matches: list[MatchLeaf | MatchTree] = []
         expression = self._expression
-        while not is_mismatch(
-            match := expression.evaluate(
+        while is_success(
+            result := expression.evaluate(
                 text, index, cache=cache, rule_name=None
             )
         ):
-            assert isinstance(match, MatchLeaf | MatchTree), match
-            children.append(match)
+            match = result.match
+            assert isinstance(match, MatchLeaf | MatchTree), (
+                rule_name,
+                result,
+            )
+            matches.append(match)
             index += match.characters_count
-        if len(children) == 0:
-            return LookaheadMatch(rule_name)
-        return MatchTree(rule_name, children=children)
+        assert is_failure(result), (rule_name, result)
+        return EvaluationSuccess(
+            (
+                LookaheadMatch(rule_name)
+                if len(matches) == 0
+                else MatchTree(rule_name, children=matches)
+            ),
+            MismatchTree(rule_name or str(self), children=[result.mismatch]),
+        )
+
+    @override
+    def to_expected_message(self, /) -> str:
+        return (
+            f'{self._expression.to_expected_message()} '
+            'repeated any amount of times or none at all'
+        )
 
     @override
     def to_match_classes(
@@ -1574,12 +2020,26 @@ class ZeroOrMoreExpression(Expression[LookaheadMatch | MatchTree, NoMismatch]):
         yield MatchTree
 
     @override
-    def to_mismatch_classes(self, /) -> Iterable[type[NoMismatch]]:
-        yield from ()
+    def to_mismatch_classes(self, /) -> Iterable[type[MismatchTree]]:
+        yield MismatchTree
 
     @override
-    def to_seed_mismatch(self, rule_name: str | None, /) -> NoMismatch:
-        raise ValueError(self)
+    def to_seed_failure(
+        self, rule_name: str | None, /
+    ) -> EvaluationFailure[MismatchTree]:
+        return EvaluationFailure(
+            MismatchTree(
+                rule_name or str(self),
+                children=[
+                    MismatchLeaf(
+                        str(self._expression),
+                        expected_message='',
+                        start_index=0,
+                        stop_index=0,
+                    )
+                ],
+            )
+        )
 
     __slots__ = ('_expression',)
 
@@ -1614,7 +2074,7 @@ class ZeroOrMoreExpression(Expression[LookaheadMatch | MatchTree, NoMismatch]):
 
 @final
 class ZeroRepetitionRangeExpression(
-    Expression[LookaheadMatch | MatchTree, NoMismatch]
+    Expression[LookaheadMatch | MatchTree, AnyMismatch]
 ):
     MIN_END: ClassVar[int] = 2
 
@@ -1650,26 +2110,47 @@ class ZeroRepetitionRangeExpression(
         index: int,
         /,
         *,
-        cache: dict[str, dict[int, AnyMatch | AnyMismatch]],
+        cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> LookaheadMatch | MatchTree | NoMismatch:
-        children: list[MatchLeaf | MatchTree] = []
+    ) -> EvaluationSuccess[LookaheadMatch | MatchTree, AnyMismatch]:
+        matches: list[MatchLeaf | MatchTree] = []
         expression = self._expression
+        final_mismatch: AnyMismatch | None = None
         for _ in range(self._end):
-            if not is_mismatch(
-                match := expression.evaluate(
-                    text, index, cache=cache, rule_name=None
+            result = expression.evaluate(
+                text, index, cache=cache, rule_name=None
+            )
+            if is_success(result):
+                match = result.match
+                assert isinstance(match, MatchLeaf | MatchTree), (
+                    rule_name,
+                    result,
                 )
-            ):
-                assert isinstance(match, MatchLeaf | MatchTree)
-                children.append(match)
+                matches.append(match)
                 index += match.characters_count
             else:
+                final_mismatch = result.mismatch
                 break
+        return EvaluationSuccess(
+            (
+                LookaheadMatch(rule_name)
+                if len(matches) == 0
+                else MatchTree(rule_name, children=matches)
+            ),
+            (
+                final_mismatch
+                if final_mismatch is None or len(matches) == 0
+                else MismatchTree(
+                    rule_name or str(self), children=[final_mismatch]
+                )
+            ),
+        )
+
+    @override
+    def to_expected_message(self, /) -> str:
         return (
-            LookaheadMatch(rule_name)
-            if len(children) == 0
-            else MatchTree(rule_name, children=children)
+            f'{self._expression.to_expected_message()} '
+            f'repeated at most {self._end} times'
         )
 
     @override
@@ -1680,11 +2161,13 @@ class ZeroRepetitionRangeExpression(
         yield MatchTree
 
     @override
-    def to_mismatch_classes(self, /) -> Iterable[type[NoMismatch]]:
-        yield from ()
+    def to_mismatch_classes(self, /) -> Iterable[type[AnyMismatch]]:
+        yield from self._expression.to_mismatch_classes()
 
     @override
-    def to_seed_mismatch(self, rule_name: str | None, /) -> NoMismatch:
+    def to_seed_failure(
+        self, rule_name: str | None, /
+    ) -> EvaluationFailure[AnyMismatch]:
         raise ValueError(self)
 
     __slots__ = '_end', '_expression'
@@ -1727,6 +2210,14 @@ class ZeroRepetitionRangeExpression(
             self._expression, parent_precedence=self.precedence()
         )
         return f'{expression_str}{{,{self._end}}}'
+
+
+def is_failure(value: Any, /) -> TypeIs[EvaluationFailure[Any]]:
+    return isinstance(value, EvaluationFailure)
+
+
+def is_success(value: Any, /) -> TypeIs[EvaluationSuccess[Any, Any]]:
+    return isinstance(value, EvaluationSuccess)
 
 
 def _escape_double_quoted_literal_characters(

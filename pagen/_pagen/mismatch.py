@@ -1,62 +1,35 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, ClassVar, TypeAlias, TypeVar, final
+from typing import ClassVar, TypeAlias, TypeVar, final
 
-from typing_extensions import Never, Self, TypeIs, override
-
-from .match import AnyMatch
+from typing_extensions import Self, override
 
 
 @final
 class MismatchLeaf:
     @property
-    def characters(self, /) -> str:
-        return self._characters
+    def expected_message(self, /) -> str:
+        return self._expected_message
 
     @property
-    def rule_name(self, /) -> str | None:
-        return self._rule_name
-
-    def __init_subclass__(cls, /) -> None:
-        raise TypeError(
-            f'type {MismatchLeaf.__qualname__!r} '
-            f'is not an acceptable base type'
-        )
-
-    @override
-    def __new__(cls, rule_name: str | None, /, *, characters: str) -> Self:
-        _validate_rule_name(rule_name)
-        if not isinstance(characters, str):
-            raise TypeError(type(characters))
-        self = super().__new__(cls)
-        self._characters, self._rule_name = characters, rule_name
-        return self
-
-    _characters: str
-    _rule_name: str | None
-
-    @override
-    def __repr__(self, /) -> str:
-        return (
-            f'{type(self).__qualname__}'
-            '('
-            f'{self._rule_name!r}, characters={self._characters!r}'
-            ')'
-        )
-
-
-@final
-class MismatchTree:
-    MIN_CHILDREN_COUNT: ClassVar[int] = 1
+    def origin_description(self, /) -> str:
+        return self._origin_description
 
     @property
-    def children(self, /) -> Sequence[_MismatchTreeChild]:
-        return self._children
+    def start_index(self, /) -> int:
+        return self._start_index
 
     @property
-    def rule_name(self, /) -> str | None:
-        return self._rule_name
+    def stop_index(self, /) -> int:
+        return self._stop_index
+
+    __slots__ = (
+        '_expected_message',
+        '_origin_description',
+        '_start_index',
+        '_stop_index',
+    )
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
@@ -67,12 +40,74 @@ class MismatchTree:
     @override
     def __new__(
         cls,
-        rule_name: str | None,
+        origin_description: str,
         /,
         *,
-        children: Sequence[AnyMatch | AnyMismatch],
+        expected_message: str,
+        start_index: int,
+        stop_index: int,
     ) -> Self:
-        _validate_rule_name(rule_name)
+        _validate_origin_description(origin_description)
+        if not isinstance(start_index, int):
+            raise TypeError(type(start_index))
+        self = super().__new__(cls)
+        (
+            self._expected_message,
+            self._origin_description,
+            self._start_index,
+            self._stop_index,
+        ) = (expected_message, origin_description, start_index, stop_index)
+        return self
+
+    _expected_message: str
+    _origin_description: str
+    _start_index: int
+    _stop_index: int
+
+    @override
+    def __repr__(self, /) -> str:
+        return (
+            f'{type(self).__qualname__}'
+            '('
+            f'{self._origin_description!r}, '
+            f'expected_message={self._expected_message!r}, '
+            f'start_index={self._start_index!r}, '
+            f'stop_index={self._stop_index!r}'
+            ')'
+        )
+
+
+@final
+class MismatchTree:
+    MIN_CHILDREN_COUNT: ClassVar[int] = 1
+
+    @property
+    def children(self, /) -> Sequence[AnyMismatch]:
+        return self._children
+
+    @property
+    def origin_description(self, /) -> str:
+        return self._origin_description
+
+    @property
+    def start_index(self, /) -> int:
+        return self._children[0].start_index
+
+    @property
+    def stop_index(self, /) -> int:
+        return self._children[-1].stop_index
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {MismatchLeaf.__qualname__!r} '
+            f'is not an acceptable base type'
+        )
+
+    @override
+    def __new__(
+        cls, origin_description: str, /, *, children: Sequence[AnyMismatch]
+    ) -> Self:
+        _validate_origin_description(origin_description)
         if len(children) < cls.MIN_CHILDREN_COUNT:
             raise ValueError(
                 f'Expected at least {cls.MIN_CHILDREN_COUNT!r} children, '
@@ -83,51 +118,38 @@ class MismatchTree:
                 invalid_children := [
                     child
                     for child in children
-                    if not isinstance(child, _MismatchTreeChild)
+                    if not isinstance(child, AnyMismatch)
                 ]
             )
             > 0
         ):
             raise TypeError(
-                f'All children must have type {_MismatchTreeChild}, '
+                f'All children must have type {AnyMismatch}, '
                 f'but got {invalid_children!r}.'
             )
         self = super().__new__(cls)
-        self._children, self._rule_name = children, rule_name
+        self._children, self._origin_description = children, origin_description
         return self
 
-    _children: Sequence[_MismatchTreeChild]
-    _rule_name: str | None
+    _children: Sequence[AnyMismatch]
+    _origin_description: str
 
     @override
     def __repr__(self, /) -> str:
         return (
             f'{type(self).__qualname__}'
             '('
-            f'{self._rule_name!r}, children={self._children!r}'
+            f'{self._origin_description!r}, children={self._children!r}'
             ')'
         )
 
 
 AnyMismatch: TypeAlias = MismatchLeaf | MismatchTree
-NoMismatch: TypeAlias = Never
 MismatchT_co = TypeVar(
-    'MismatchT_co',
-    AnyMismatch,
-    MismatchLeaf,
-    MismatchTree,
-    NoMismatch,
-    covariant=True,
+    'MismatchT_co', MismatchLeaf, MismatchTree, AnyMismatch, covariant=True
 )
 
 
-def is_mismatch(value: Any, /) -> TypeIs[AnyMismatch]:
-    return isinstance(value, AnyMismatch)
-
-
-_MismatchTreeChild: TypeAlias = AnyMatch | AnyMismatch
-
-
-def _validate_rule_name(rule_name: str | None, /) -> None:
-    if not isinstance(rule_name, str | None):
-        raise TypeError(type(rule_name))
+def _validate_origin_description(value: str, /) -> None:
+    if not isinstance(value, str):
+        raise TypeError(type(value))
