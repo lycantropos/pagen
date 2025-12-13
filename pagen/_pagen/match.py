@@ -8,7 +8,6 @@ from typing_extensions import Self
 
 @final
 class LookaheadMatch:
-    characters: ClassVar[str] = ''
     characters_count: ClassVar[int] = 0
 
     @property

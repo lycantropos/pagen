@@ -786,13 +786,6 @@ def parse_grammar(
     return grammar_builder.build()
 
 
-def _match_to_str(value: MatchLeaf | MatchTree, /) -> str:
-    if isinstance(value, MatchLeaf):
-        return value.characters
-    assert isinstance(value, MatchTree), value
-    return ''.join(map(_match_to_str, value.children))
-
-
 class MatchTreeVisitor:
     VISITOR_METHOD_PREFIX: ClassVar[str] = 'visit_'
 
@@ -892,7 +885,7 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         self, match: AnyMatch, /
     ) -> None:
         assert isinstance(match, MatchLeaf | MatchTree), match
-        character = _match_to_str(match)
+        character = match.characters
         character = self._CHARACTER_CLASS_SPECIAL_CHARACTER_MAPPING.get(
             character, character
         )
@@ -944,7 +937,7 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         self, match: AnyMatch, /
     ) -> None:
         assert isinstance(match, MatchLeaf | MatchTree), match
-        character = _match_to_str(match)
+        character = match.characters
         character = self._DOUBLE_QUOTED_LITERAL_SPECIAL_CHARACTER_MAPPING.get(
             character, character
         )
@@ -967,7 +960,7 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
 
     def visit_Identifier(self, match: AnyMatch, /) -> None:  # noqa: N802
         assert isinstance(match, MatchLeaf | MatchTree), match
-        self._identifiers.append(_match_to_str(match))
+        self._identifiers.append(match.characters)
 
     def visit_NegativeLookaheadExpression(  # noqa: N802
         self, match: AnyMatch, /
@@ -1106,7 +1099,7 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         self, match: AnyMatch, /
     ) -> None:
         assert isinstance(match, MatchLeaf | MatchTree), match
-        character = _match_to_str(match)
+        character = match.characters
         character = self._SINGLE_QUOTED_LITERAL_SPECIAL_CHARACTER_MAPPING.get(
             character, character
         )
@@ -1115,7 +1108,7 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
 
     def visit_UnsignedInteger(self, match: AnyMatch, /) -> None:  # noqa: N802
         assert isinstance(match, MatchLeaf | MatchTree), match
-        value = int(_match_to_str(match))
+        value = int(match.characters)
         assert value >= 0, value
         self._unsigned_integers[-1].append(value)
 

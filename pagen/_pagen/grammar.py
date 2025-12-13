@@ -83,7 +83,7 @@ class Grammar(Generic[MatchT_co, MismatchT_co]):
             return result
         assert isinstance(value, MismatchLeaf)
         return [
-            f'{depth * unit_space}{value.origin_description}:',
-            f'{(depth + 1) * unit_space}expected {value.expected_message}, '
-            f'got {text[value.start_index : value.stop_index]!r}',
+            f'{depth * unit_space}{value.origin_description}: '
+            f'expected {value.expected_message}, '
+            f'got {text[value.start_index : value.stop_index]!r}'
         ]
