@@ -85,4 +85,4 @@ class GrammarBuilder(Generic[MatchT_co, MismatchT_co]):
 
     @override
     def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self._expression_builders})'
+        return f'{type(self).__qualname__}({self._expression_builders!r})'
