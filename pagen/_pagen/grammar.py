@@ -16,15 +16,6 @@ class Grammar(Generic[MatchT_co, MismatchT_co]):
     def rules(self, /) -> Mapping[str, Rule[MatchT_co, MismatchT_co]]:
         return self._rules
 
-    __slots__ = ('_rules',)
-
-    def __new__(
-        cls, rules: Mapping[str, Rule[MatchT_co, MismatchT_co]], /
-    ) -> Self:
-        self = super().__new__(cls)
-        self._rules = rules
-        return self
-
     def parse(self, value: str, /, *, starting_rule_name: str) -> MatchT_co:
         result = self._rules[starting_rule_name].parse(
             value, 0, cache={}, rule_name=None
@@ -48,6 +39,33 @@ class Grammar(Generic[MatchT_co, MismatchT_co]):
 
     _rules: Mapping[str, Rule[MatchT_co, MismatchT_co]]
 
+    def _mismatch_to_strings(
+        self, text: str, value: MismatchLeaf | MismatchTree, /, *, depth: int
+    ) -> list[str]:
+        unit_space = '  '
+        if isinstance(value, MismatchTree):
+            result = [f'{depth * unit_space}{value.origin_description}:']
+            for child in value.children:
+                result.extend(
+                    self._mismatch_to_strings(text, child, depth=depth + 1)
+                )
+            return result
+        assert isinstance(value, MismatchLeaf)
+        return [
+            f'{depth * unit_space}{value.origin_description}: '
+            f'expected {value.expected_message}, '
+            f'got {text[value.start_index : value.stop_index]!r}'
+        ]
+
+    __slots__ = ('_rules',)
+
+    def __new__(
+        cls, rules: Mapping[str, Rule[MatchT_co, MismatchT_co]], /
+    ) -> Self:
+        self = super().__new__(cls)
+        self._rules = rules
+        return self
+
     @overload
     def __eq__(self, other: Self, /) -> bool: ...
 
@@ -69,21 +87,3 @@ class Grammar(Generic[MatchT_co, MismatchT_co]):
     @override
     def __str__(self, /) -> str:
         return '\n'.join(map(str, self._rules.values()))
-
-    def _mismatch_to_strings(
-        self, text: str, value: MismatchLeaf | MismatchTree, /, *, depth: int
-    ) -> list[str]:
-        unit_space = '  '
-        if isinstance(value, MismatchTree):
-            result = [f'{depth * unit_space}{value.origin_description}:']
-            for child in value.children:
-                result.extend(
-                    self._mismatch_to_strings(text, child, depth=depth + 1)
-                )
-            return result
-        assert isinstance(value, MismatchLeaf)
-        return [
-            f'{depth * unit_space}{value.origin_description}: '
-            f'expected {value.expected_message}, '
-            f'got {text[value.start_index : value.stop_index]!r}'
-        ]

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Generic, overload
+from typing import Any, Generic, final, overload
 
 from typing_extensions import Self, override
 
@@ -11,8 +11,6 @@ from .mismatch import AnyMismatch, MismatchT_co
 
 
 class Rule(ABC, Generic[MatchT_co, MismatchT_co]):
-    __slots__ = ()
-
     @property
     @abstractmethod
     def expression(self, /) -> Expression[MatchT_co, MismatchT_co]:
@@ -35,21 +33,15 @@ class Rule(ABC, Generic[MatchT_co, MismatchT_co]):
     ) -> EvaluationResult[MatchT_co, MismatchT_co]:
         raise NotImplementedError
 
+    __slots__ = ()
+
     @override
     def __str__(self, /) -> str:
         return f'{self.name} <- {self.expression}'
 
 
+@final
 class LeftRecursiveRule(Rule[MatchT_co, MismatchT_co]):
-    __slots__ = '_expression', '_name'
-
-    def __new__(
-        cls, name: str, expression: Expression[MatchT_co, MismatchT_co], /
-    ) -> Self:
-        self = super().__new__(cls)
-        self._expression, self._name = expression, name
-        return self
-
     @property
     @override
     def expression(self, /) -> Expression[MatchT_co, MismatchT_co]:
@@ -103,6 +95,22 @@ class LeftRecursiveRule(Rule[MatchT_co, MismatchT_co]):
     _expression: Expression[MatchT_co, MismatchT_co]
     _name: str
 
+    __slots__ = '_expression', '_name'
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {LeftRecursiveRule.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
+    @override
+    def __new__(
+        cls, name: str, expression: Expression[MatchT_co, MismatchT_co], /
+    ) -> Self:
+        self = super().__new__(cls)
+        self._expression, self._name = expression, name
+        return self
+
     @overload
     def __eq__(self, other: Self, /) -> bool: ...
 
@@ -129,16 +137,8 @@ class LeftRecursiveRule(Rule[MatchT_co, MismatchT_co]):
         )
 
 
+@final
 class NonLeftRecursiveRule(Rule[MatchT_co, MismatchT_co]):
-    __slots__ = '_expression', '_name'
-
-    def __new__(
-        cls, name: str, expression: Expression[MatchT_co, MismatchT_co], /
-    ) -> Self:
-        self = super().__new__(cls)
-        self._expression, self._name = expression, name
-        return self
-
     @property
     @override
     def expression(self, /) -> Expression[MatchT_co, MismatchT_co]:
@@ -174,6 +174,21 @@ class NonLeftRecursiveRule(Rule[MatchT_co, MismatchT_co]):
 
     _expression: Expression[MatchT_co, MismatchT_co]
     _name: str
+
+    __slots__ = '_expression', '_name'
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {NonLeftRecursiveRule.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
+    def __new__(
+        cls, name: str, expression: Expression[MatchT_co, MismatchT_co], /
+    ) -> Self:
+        self = super().__new__(cls)
+        self._expression, self._name = expression, name
+        return self
 
     @overload
     def __eq__(self, other: Self, /) -> bool: ...

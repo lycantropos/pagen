@@ -75,6 +75,12 @@ class EvaluationSuccess(EvaluationResult[MatchT_co, MismatchT_co]):
 
     __slots__ = '_match', '_mismatch'
 
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {EvaluationSuccess.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
     def __new__(
         cls, match: MatchT_co, mismatch: MismatchT_co | None, /
     ) -> Self:
@@ -104,6 +110,12 @@ class EvaluationFailure(EvaluationResult[Any, MismatchT_co]):
     _mismatch: MismatchT_co
 
     __slots__ = ('_mismatch',)
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {EvaluationFailure.__qualname__!r} '
+            'is not an acceptable base type'
+        )
 
     @override
     def __new__(cls, mismatch: MismatchT_co, /) -> Self:
@@ -367,6 +379,8 @@ class CharacterClassExpression(Expression[MatchLeaf, MismatchLeaf]):
             )
         )
 
+    _elements: Sequence[CharacterRange | CharacterSet]
+
     __slots__ = ('_elements',)
 
     def __init_subclass__(cls, /) -> None:
@@ -387,8 +401,6 @@ class CharacterClassExpression(Expression[MatchLeaf, MismatchLeaf]):
         self = super().__new__(cls)
         self._elements = merge_consecutive_character_sets(elements)
         return self
-
-    _elements: Sequence[CharacterRange | CharacterSet]
 
     @override
     def __repr__(self, /) -> str:
@@ -481,6 +493,8 @@ class ComplementedCharacterClassExpression(
             )
         )
 
+    _elements: Sequence[CharacterRange | CharacterSet]
+
     __slots__ = ('_elements',)
 
     def __init_subclass__(cls, /) -> None:
@@ -501,8 +515,6 @@ class ComplementedCharacterClassExpression(
         self = super().__new__(cls)
         self._elements = merge_consecutive_character_sets(elements)
         return self
-
-    _elements: Sequence[CharacterRange | CharacterSet]
 
     @override
     def __repr__(self, /) -> str:
@@ -608,6 +620,9 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
             )
         )
 
+    _count: int
+    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
+
     __slots__ = '_count', '_expression'
 
     def __init_subclass__(cls, /) -> None:
@@ -633,9 +648,6 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
         self = super().__new__(cls)
         self._count, self._expression = count, expression
         return self
-
-    _count: int
-    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
 
     @override
     def __repr__(self, /) -> str:
@@ -746,6 +758,8 @@ class DoubleQuotedLiteralExpression(LiteralExpression):
     def characters(self, /) -> str:
         return self._characters
 
+    _characters: str
+
     __slots__ = ('_characters',)
 
     def __init_subclass__(cls, /) -> None:
@@ -759,8 +773,6 @@ class DoubleQuotedLiteralExpression(LiteralExpression):
         self = super().__new__(cls)
         self._characters = characters
         return self
-
-    _characters: str
 
     @override
     def __str__(self, /) -> str:
@@ -776,6 +788,8 @@ class SingleQuotedLiteralExpression(LiteralExpression):
     def characters(self, /) -> str:
         return self._characters
 
+    _characters: str
+
     __slots__ = ('_characters',)
 
     def __init_subclass__(cls, /) -> None:
@@ -789,8 +803,6 @@ class SingleQuotedLiteralExpression(LiteralExpression):
         self = super().__new__(cls)
         self._characters = characters
         return self
-
-    _characters: str
 
     @override
     def __str__(self, /) -> str:
@@ -871,6 +883,8 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
             )
         )
 
+    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
+
     __slots__ = ('_expression',)
 
     def __init_subclass__(cls, /) -> None:
@@ -887,8 +901,6 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
         self = super().__new__(cls)
         self._expression = expression
         return self
-
-    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
 
     @override
     def __repr__(self, /) -> str:
@@ -1003,6 +1015,8 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
             )
         )
 
+    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
+
     __slots__ = ('_expression',)
 
     def __init_subclass__(cls, /) -> None:
@@ -1019,8 +1033,6 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
         self = super().__new__(cls)
         self._expression = expression
         return self
-
-    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
 
     @override
     def __repr__(self, /) -> str:
@@ -1094,6 +1106,8 @@ class OptionalExpression(Expression[AnyMatch, AnyMismatch]):
     ) -> EvaluationFailure[AnyMismatch]:
         raise ValueError(self)
 
+    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
+
     __slots__ = ('_expression',)
 
     def __init_subclass__(cls, /) -> None:
@@ -1110,8 +1124,6 @@ class OptionalExpression(Expression[AnyMatch, AnyMismatch]):
         self = super().__new__(cls)
         self._expression = expression
         return self
-
-    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
 
     @override
     def __repr__(self, /) -> str:
@@ -1197,6 +1209,8 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
             )
         )
 
+    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
+
     __slots__ = ('_expression',)
 
     def __init_subclass__(cls, /) -> None:
@@ -1213,8 +1227,6 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
         self = super().__new__(cls)
         self._expression = expression
         return self
-
-    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
 
     @override
     def __repr__(self, /) -> str:
@@ -1333,6 +1345,9 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
             )
         )
 
+    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
+    _start: int
+
     __slots__ = '_expression', '_start'
 
     def __init_subclass__(cls, /) -> None:
@@ -1358,9 +1373,6 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
         self = super().__new__(cls)
         self._expression, self._start = expression, start
         return self
-
-    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
-    _start: int
 
     @override
     def __repr__(self, /) -> str:
@@ -1494,6 +1506,10 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
             )
         )
 
+    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
+    _end: int
+    _start: int
+
     __slots__ = '_end', '_expression', '_start'
 
     def __init_subclass__(cls, /) -> None:
@@ -1527,10 +1543,6 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
         self = super().__new__(cls)
         self._expression, self._end, self._start = expression, end, start
         return self
-
-    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
-    _end: int
-    _start: int
 
     @override
     def __repr__(self, /) -> str:
@@ -1631,6 +1643,8 @@ class PrioritizedChoiceExpression(Expression[MatchT_co, MismatchTree]):
             )
         )
 
+    _variants: Sequence[Expression[MatchT_co, AnyMismatch]]
+
     __slots__ = ('_variants',)
 
     def __init_subclass__(cls, /) -> None:
@@ -1646,8 +1660,6 @@ class PrioritizedChoiceExpression(Expression[MatchT_co, MismatchTree]):
         self = super().__new__(cls)
         self._variants = variants
         return self
-
-    _variants: Sequence[Expression[MatchT_co, AnyMismatch]]
 
     @override
     def __repr__(self, /) -> str:
@@ -1731,6 +1743,12 @@ class RuleReference(Expression[MatchT_co, MismatchT_co]):
     ) -> EvaluationFailure[MismatchT_co]:
         return self.resolve().expression.to_seed_failure(rule_name)
 
+    _match_classes: Sequence[type[MatchT_co]]
+    _mismatch_classes: Sequence[type[MismatchT_co]]
+    _name: str
+    _referent_name: str
+    _rules: Mapping[str, Rule[MatchT_co, MismatchT_co]]
+
     __slots__ = (
         '_match_classes',
         '_mismatch_classes',
@@ -1765,12 +1783,6 @@ class RuleReference(Expression[MatchT_co, MismatchT_co]):
             self._rules,
         ) = (match_classes, mismatch_classes, name, referent_name, rules)
         return self
-
-    _match_classes: Sequence[type[MatchT_co]]
-    _mismatch_classes: Sequence[type[MismatchT_co]]
-    _name: str
-    _referent_name: str
-    _rules: Mapping[str, Rule[MatchT_co, MismatchT_co]]
 
     @override
     def __repr__(self, /) -> str:
@@ -1910,6 +1922,8 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
             )
         )
 
+    _elements: Sequence[Expression[AnyMatch, AnyMismatch]]
+
     __slots__ = ('_elements',)
 
     def __init_subclass__(cls, /) -> None:
@@ -1929,8 +1943,6 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
         self = super().__new__(cls)
         self._elements = elements
         return self
-
-    _elements: Sequence[Expression[AnyMatch, AnyMismatch]]
 
     @override
     def __repr__(self, /) -> str:
@@ -2041,6 +2053,8 @@ class ZeroOrMoreExpression(
             )
         )
 
+    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
+
     __slots__ = ('_expression',)
 
     def __init_subclass__(cls, /) -> None:
@@ -2057,8 +2071,6 @@ class ZeroOrMoreExpression(
         self = super().__new__(cls)
         self._expression = expression
         return self
-
-    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
 
     @override
     def __repr__(self, /) -> str:
@@ -2170,6 +2182,9 @@ class ZeroRepetitionRangeExpression(
     ) -> EvaluationFailure[AnyMismatch]:
         raise ValueError(self)
 
+    _end: int
+    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
+
     __slots__ = '_end', '_expression'
 
     def __init_subclass__(cls, /) -> None:
@@ -2196,9 +2211,6 @@ class ZeroRepetitionRangeExpression(
         self = super().__new__(cls)
         self._end, self._expression = end, expression
         return self
-
-    _end: int
-    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
 
     @override
     def __repr__(self, /) -> str:
