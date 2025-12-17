@@ -124,7 +124,7 @@ class RuleName(str, Enum):
         return self._value_
 
 
-PARSER_GRAMMAR_BUILDER: Final[GrammarBuilder] = GrammarBuilder()
+PARSER_GRAMMAR_BUILDER: Final[GrammarBuilder[Any, Any]] = GrammarBuilder()
 PARSER_GRAMMAR_BUILDER.add_rule(
     RuleName.GRAMMAR,
     SequenceExpressionBuilder(
@@ -764,7 +764,7 @@ assert (
     )
     == 0
 ), missing_expression_classes
-PARSER_GRAMMAR: Final[Grammar] = PARSER_GRAMMAR_BUILDER.build()
+PARSER_GRAMMAR: Final[Grammar[Any, Any]] = PARSER_GRAMMAR_BUILDER.build()
 assert (
     len(
         unsupported_classes := [
@@ -778,8 +778,8 @@ assert (
 
 
 def parse_grammar(
-    text: str, /, *, parser_grammar: Grammar = PARSER_GRAMMAR
-) -> Grammar:
+    text: str, /, *, parser_grammar: Grammar[Any, Any] = PARSER_GRAMMAR
+) -> Grammar[Any, Any]:
     tree = parser_grammar.parse(text, starting_rule_name='Grammar')
     grammar_builder = GrammarBuilder()
     TreeToGrammarVisitor(grammar_builder).visit(tree)
@@ -1169,7 +1169,7 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         with _push_sublist(self._unsigned_integers) as result:
             yield result
 
-    def __init__(self, grammar_builder: GrammarBuilder, /) -> None:
+    def __init__(self, grammar_builder: GrammarBuilder[Any, Any], /) -> None:
         super().__init__()
         self._grammar_builder = grammar_builder
         self._character_class_characters: list[list[str]] = []
