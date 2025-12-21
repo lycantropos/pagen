@@ -1119,9 +1119,7 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
         name: str,
         /,
         *,
-        expression_builders: Mapping[
-            str, ExpressionBuilder[MatchT_co, MismatchT_co]
-        ],
+        expression_builders: Mapping[str, ExpressionBuilder[Any, Any]],
     ) -> Self:
         assert len(name) > 0, name
         self = super().__new__(cls)

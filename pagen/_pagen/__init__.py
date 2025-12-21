@@ -8,7 +8,6 @@ from .expression_builders import (
     ComplementedCharacterClassExpressionBuilder as ComplementedCharacterClassExpressionBuilder,  # noqa: E501
     DoubleQuotedLiteralExpressionBuilder as DoubleQuotedLiteralExpressionBuilder,  # noqa: E501
     ExactRepetitionExpressionBuilder as ExactRepetitionExpressionBuilder,
-    ExpressionBuilder as ExpressionBuilder,
     NegativeLookaheadExpressionBuilder as NegativeLookaheadExpressionBuilder,
     OneOrMoreExpressionBuilder as OneOrMoreExpressionBuilder,
     OptionalExpressionBuilder as OptionalExpressionBuilder,
@@ -28,7 +27,6 @@ from .expressions import (
     ComplementedCharacterClassExpression as ComplementedCharacterClassExpression,  # noqa: E501
     DoubleQuotedLiteralExpression as DoubleQuotedLiteralExpression,
     ExactRepetitionExpression as ExactRepetitionExpression,
-    Expression as Expression,
     NegativeLookaheadExpression as NegativeLookaheadExpression,
     OneOrMoreExpression as OneOrMoreExpression,
     OptionalExpression as OptionalExpression,

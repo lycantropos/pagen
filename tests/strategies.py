@@ -3,7 +3,7 @@ from _operator import add
 from collections.abc import Callable, Mapping, Sequence
 from enum import IntEnum, auto
 from functools import partial
-from typing import Any, Final, Literal, TypeAlias
+from typing import Any, Final, Literal, TypeAlias, TypeVar
 
 from hypothesis import strategies as st
 
@@ -18,10 +18,6 @@ from pagen.models import (
     ExactRepetitionExpressionBuilder,
     ExpressionBuilder,
     GrammarBuilder,
-    MatchLeaf,
-    MatchTree,
-    MismatchLeaf,
-    MismatchTree,
     NegativeLookaheadExpressionBuilder,
     OneOrMoreExpressionBuilder,
     OptionalExpressionBuilder,
@@ -48,13 +44,6 @@ class ExpressionBuilderCategory(IntEnum):
     PROGRESSING = auto()
 
 
-ExpressionBuilderFactory: TypeAlias = Callable[
-    [
-        Mapping[str, ExpressionBuilder[Any, Any]],
-        Mapping[ExpressionBuilderCategory, Sequence[str]],
-    ],
-    ExpressionBuilder[Any, Any],
-]
 MaybeNonProgressingExpressionBuilder: TypeAlias = (
     NegativeLookaheadExpressionBuilder
     | OptionalExpressionBuilder
@@ -62,27 +51,52 @@ MaybeNonProgressingExpressionBuilder: TypeAlias = (
     | ZeroOrMoreExpressionBuilder
     | ZeroRepetitionRangeExpressionBuilder
 )
-ProgressingExpressionBuilder: TypeAlias = (
+ProgressingRepetitionExpressionBuilder: TypeAlias = (
     ExactRepetitionExpressionBuilder
     | OneOrMoreExpressionBuilder
     | PositiveRepetitionRangeExpressionBuilder
     | PositiveOrMoreExpressionBuilder
 )
+_ExpressionBuilderT = TypeVar(
+    '_ExpressionBuilderT',
+    AnyCharacterExpressionBuilder,
+    DoubleQuotedLiteralExpressionBuilder,
+    CharacterClassExpressionBuilder,
+    ComplementedCharacterClassExpressionBuilder,
+    ProgressingRepetitionExpressionBuilder,
+    ZeroRepetitionRangeExpressionBuilder,
+    SingleQuotedLiteralExpressionBuilder,
+    NegativeLookaheadExpressionBuilder,
+    OneOrMoreExpressionBuilder,
+    OptionalExpressionBuilder,
+    PositiveLookaheadExpressionBuilder,
+    PrioritizedChoiceExpressionBuilder[Any],
+    RuleReferenceBuilder[Any, Any],
+    SequenceExpressionBuilder,
+    ZeroOrMoreExpressionBuilder,
+)
+ExpressionBuilderFactory: TypeAlias = Callable[
+    [
+        Mapping[str, _ExpressionBuilderT],
+        Mapping[ExpressionBuilderCategory, Sequence[str]],
+    ],
+    _ExpressionBuilderT,
+]
 
 
 def to_expression_builders_strategy(
     *, with_lookahead: bool
-) -> st.SearchStrategy[Mapping[str, ExpressionBuilder[Any, Any]]]:
+) -> st.SearchStrategy[Mapping[str, ExpressionBuilder]]:
     def to_categorized_prioritized_choice_expression_builder_factory(
         categorized_offsets: Sequence[tuple[ExpressionBuilderCategory, int]], /
-    ) -> tuple[ExpressionBuilderCategory, ExpressionBuilderFactory]:
+    ) -> tuple[ExpressionBuilderCategory, ExpressionBuilderFactory[Any]]:
         def expression_builder_factory(
-            expression_builders: Mapping[str, ExpressionBuilder[Any, Any]],
+            expression_builders: Mapping[str, ExpressionBuilder],
             categorized_rule_names: Mapping[
                 ExpressionBuilderCategory, Sequence[str]
             ],
             /,
-        ) -> PrioritizedChoiceExpressionBuilder:
+        ) -> PrioritizedChoiceExpressionBuilder[Any]:
             return PrioritizedChoiceExpressionBuilder(
                 [
                     RuleReferenceBuilder(
@@ -113,21 +127,21 @@ def to_expression_builders_strategy(
         ],
         /,
         *args: Any,
-        expression_builder_cls: type[ProgressingExpressionBuilder],
+        expression_builder_cls: type[ProgressingRepetitionExpressionBuilder],
     ) -> tuple[
         Literal[ExpressionBuilderCategory.PROGRESSING],
-        ExpressionBuilderFactory,
+        ExpressionBuilderFactory[ProgressingRepetitionExpressionBuilder],
     ]:
         category, offset = categorized_offset
         assert category is ExpressionBuilderCategory.PROGRESSING, category
 
         def expression_builder_factory(
-            expression_builders: Mapping[str, ExpressionBuilder[Any, Any]],
+            expression_builders: Mapping[str, ExpressionBuilder],
             categorized_rule_names: Mapping[
                 ExpressionBuilderCategory, Sequence[str]
             ],
             /,
-        ) -> ExpressionBuilder[Any, Any]:
+        ) -> ProgressingRepetitionExpressionBuilder:
             return expression_builder_cls(
                 RuleReferenceBuilder(
                     categorized_rule_names[category][
@@ -147,10 +161,10 @@ def to_expression_builders_strategy(
         categorized_offsets: Sequence[tuple[ExpressionBuilderCategory, int]], /
     ) -> tuple[
         Literal[ExpressionBuilderCategory.PROGRESSING],
-        ExpressionBuilderFactory,
+        ExpressionBuilderFactory[Any],
     ]:
         def expression_builder_factory(
-            expression_builders: Mapping[str, ExpressionBuilder[Any, Any]],
+            expression_builders: Mapping[str, ExpressionBuilder],
             categorized_rule_names: Mapping[
                 ExpressionBuilderCategory, Sequence[str]
             ],
@@ -182,18 +196,18 @@ def to_expression_builders_strategy(
         expression_builder_cls: type[MaybeNonProgressingExpressionBuilder],
     ) -> tuple[
         Literal[ExpressionBuilderCategory.MAYBE_NON_PROGRESSING],
-        ExpressionBuilderFactory,
+        ExpressionBuilderFactory[Any],
     ]:
         category, offset = categorized_offset
         assert category is ExpressionBuilderCategory.PROGRESSING, category
 
         def expression_builder_factory(
-            expression_builders: Mapping[str, ExpressionBuilder[Any, Any]],
+            expression_builders: Mapping[str, ExpressionBuilder],
             categorized_rule_names: Mapping[
                 ExpressionBuilderCategory, Sequence[str]
             ],
             /,
-        ) -> ExpressionBuilder[Any, Any]:
+        ) -> ExpressionBuilder:
             return expression_builder_cls(
                 RuleReferenceBuilder(
                     categorized_rule_names[category][
@@ -211,11 +225,15 @@ def to_expression_builders_strategy(
 
     def build_builders(
         categorized_expression_builder_factories: Mapping[
-            str, tuple[ExpressionBuilderCategory, ExpressionBuilderFactory]
+            str,
+            tuple[
+                ExpressionBuilderCategory,
+                ExpressionBuilderFactory[_ExpressionBuilderT],
+            ],
         ],
         /,
-    ) -> Mapping[str, ExpressionBuilder[Any, Any]]:
-        result: dict[str, ExpressionBuilder[Any, Any]] = {}
+    ) -> Mapping[str, _ExpressionBuilderT]:
+        result: dict[str, _ExpressionBuilderT] = {}
         categorized_rule_names: dict[ExpressionBuilderCategory, list[str]] = {}
         for rule_name, (
             expression_builder_category,
@@ -251,9 +269,14 @@ def to_expression_builders_strategy(
 
     def to_maybe_non_progressing_expression_builders(
         base: st.SearchStrategy[
-            ExpressionBuilder[
-                MatchLeaf | MatchTree, MismatchLeaf | MismatchTree
-            ]
+            AnyCharacterExpressionBuilder
+            | CharacterClassExpressionBuilder
+            | ComplementedCharacterClassExpressionBuilder
+            | DoubleQuotedLiteralExpressionBuilder
+            | SingleQuotedLiteralExpressionBuilder
+            | PrioritizedChoiceExpressionBuilder[Any]
+            | ProgressingRepetitionExpressionBuilder
+            | SequenceExpressionBuilder
         ],
         /,
     ) -> st.SearchStrategy[MaybeNonProgressingExpressionBuilder]:
@@ -290,19 +313,28 @@ def to_expression_builders_strategy(
 
     def extend_progressing_non_recursive_expression_builders(
         step: st.SearchStrategy[
-            ExpressionBuilder[
-                MatchLeaf | MatchTree, MismatchLeaf | MismatchTree
-            ]
+            AnyCharacterExpressionBuilder
+            | CharacterClassExpressionBuilder
+            | ComplementedCharacterClassExpressionBuilder
+            | DoubleQuotedLiteralExpressionBuilder
+            | SingleQuotedLiteralExpressionBuilder
+            | PrioritizedChoiceExpressionBuilder[Any]
+            | ProgressingRepetitionExpressionBuilder
+            | SequenceExpressionBuilder
         ],
         /,
     ) -> st.SearchStrategy[
-        ExpressionBuilder[MatchLeaf | MatchTree, MismatchLeaf | MismatchTree]
+        PrioritizedChoiceExpressionBuilder[Any]
+        | ProgressingRepetitionExpressionBuilder
+        | SequenceExpressionBuilder
     ]:
         prioritized_choice_expression_builder_strategy: st.SearchStrategy[
             PrioritizedChoiceExpressionBuilder[Any]
         ] = st.lists(
             step, min_size=2, max_size=MAX_EXPRESSION_BUILDER_ELEMENTS_COUNT
-        ).map(PrioritizedChoiceExpressionBuilder)  # fmt: skip
+        ).map(
+            PrioritizedChoiceExpressionBuilder  # pyright: ignore[reportArgumentType]
+        )
         return st.one_of(
             st.builds(
                 ExactRepetitionExpressionBuilder,
@@ -544,18 +576,18 @@ def to_expression_builders_strategy(
 
 
 identifier_start_characters = '_' + string.ascii_letters
-rule_name_strategy = st.builds(
+rule_name_strategy: st.SearchStrategy[str] = st.builds(
     add,
     st.text(st.sampled_from(identifier_start_characters), min_size=1),
     st.text(st.sampled_from(identifier_start_characters + string.digits)),
 )
 string_literal_value_strategy = st.text(min_size=1)
 grammar_builder_strategy = st.builds(
-    GrammarBuilder, to_expression_builders_strategy(with_lookahead=True)
+    GrammarBuilder, to_expression_builders_strategy(with_lookahead=False)
 )
 
 
-def is_valid_grammar_builder(value: GrammarBuilder, /) -> bool:
+def is_valid_grammar_builder(value: GrammarBuilder[Any, Any], /) -> bool:
     try:
         value.build()
     except ValueError:

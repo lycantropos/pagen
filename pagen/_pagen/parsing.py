@@ -8,8 +8,6 @@ from typing import Any, ClassVar, Final, TypeVar, cast
 
 from typing_extensions import override
 
-from pagen._utils import to_package_non_abstract_subclasses
-
 from . import CharacterRange, CharacterSet
 from .constants import (
     CHARACTER_CLASS_SPECIAL_CHARACTERS,
@@ -61,6 +59,7 @@ from .grammar_builder import GrammarBuilder
 from .match import AnyMatch, MatchLeaf, MatchTree
 from .mismatch import AnyMismatch
 from .rule import Rule
+from .utils import to_package_non_abstract_subclasses
 
 
 @unique

@@ -1,12 +1,12 @@
+from typing import Any, get_args
+
 from . import _pagen as _module
-from ._utils import to_package_non_abstract_subclasses
 
 # character containers
 CharacterRange = _module.CharacterRange
 CharacterSet = _module.CharacterSet
 
 # expressions
-Expression = _module.Expression
 AnyCharacterExpression = _module.AnyCharacterExpression
 CharacterClassExpression = _module.CharacterClassExpression
 ComplementedCharacterClassExpression = (
@@ -27,11 +27,30 @@ SingleQuotedLiteralExpression = _module.SingleQuotedLiteralExpression
 ZeroOrMoreExpression = _module.ZeroOrMoreExpression
 ZeroRepetitionRangeExpression = _module.ZeroRepetitionRangeExpression
 
+Expression = (
+    AnyCharacterExpression
+    | CharacterClassExpression
+    | DoubleQuotedLiteralExpression
+    | ExactRepetitionExpression
+    | NegativeLookaheadExpression
+    | OneOrMoreExpression
+    | OptionalExpression
+    | PositiveLookaheadExpression
+    | PositiveOrMoreExpression
+    | PositiveRepetitionRangeExpression
+    | PrioritizedChoiceExpression[Any]
+    | RuleReference[Any, Any]
+    | SequenceExpression
+    | SingleQuotedLiteralExpression
+    | ZeroOrMoreExpression
+    | ZeroRepetitionRangeExpression
+)
+
 assert (
     len(
         missing_expression_classes := [
             cls
-            for cls in to_package_non_abstract_subclasses(Expression)  # type: ignore[type-abstract]
+            for cls in get_args(Expression)
             if cls is not globals().get(cls.__name__)
         ]
     )
@@ -39,7 +58,6 @@ assert (
 ), missing_expression_classes
 
 # expression builders
-ExpressionBuilder = _module.ExpressionBuilder
 AnyCharacterExpressionBuilder = _module.AnyCharacterExpressionBuilder
 DoubleQuotedLiteralExpressionBuilder = (
     _module.DoubleQuotedLiteralExpressionBuilder
@@ -68,11 +86,31 @@ RuleReferenceBuilder = _module.RuleReferenceBuilder
 SequenceExpressionBuilder = _module.SequenceExpressionBuilder
 ZeroOrMoreExpressionBuilder = _module.ZeroOrMoreExpressionBuilder
 
+ExpressionBuilder = (
+    AnyCharacterExpressionBuilder
+    | DoubleQuotedLiteralExpressionBuilder
+    | CharacterClassExpressionBuilder
+    | ComplementedCharacterClassExpressionBuilder
+    | ExactRepetitionExpressionBuilder
+    | PositiveOrMoreExpressionBuilder
+    | PositiveRepetitionRangeExpressionBuilder
+    | ZeroRepetitionRangeExpressionBuilder
+    | SingleQuotedLiteralExpressionBuilder
+    | NegativeLookaheadExpressionBuilder
+    | OneOrMoreExpressionBuilder
+    | OptionalExpressionBuilder
+    | PositiveLookaheadExpressionBuilder
+    | PrioritizedChoiceExpressionBuilder[Any]
+    | RuleReferenceBuilder[Any, Any]
+    | SequenceExpressionBuilder
+    | ZeroOrMoreExpressionBuilder
+)
+
 assert (
     len(
         missing_expression_builder_classes := [
             cls
-            for cls in to_package_non_abstract_subclasses(ExpressionBuilder)  # type: ignore[type-abstract]
+            for cls in get_args(ExpressionBuilder)
             if cls is not globals().get(cls.__name__)
         ]
     )
