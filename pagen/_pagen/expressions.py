@@ -252,7 +252,7 @@ class AnyCharacterExpression(Expression[MatchLeaf, MismatchLeaf]):
                     rule_name or str(self),
                     expected_message=self.to_expected_message(),
                     start_index=index,
-                    stop_index=index,
+                    stop_index=index + 1,
                 )
             )
         )
@@ -278,7 +278,7 @@ class AnyCharacterExpression(Expression[MatchLeaf, MismatchLeaf]):
                 rule_name or str(self),
                 expected_message='',
                 start_index=0,
-                stop_index=0,
+                stop_index=1,
             )
         )
 
@@ -337,7 +337,7 @@ class CharacterClassExpression(Expression[MatchLeaf, MismatchLeaf]):
                     rule_name or str(self),
                     expected_message=self.to_expected_message(),
                     start_index=index,
-                    stop_index=index,
+                    stop_index=index + 1,
                 )
             )
         character = text[index]
@@ -375,7 +375,7 @@ class CharacterClassExpression(Expression[MatchLeaf, MismatchLeaf]):
                 rule_name or str(self),
                 expected_message='',
                 start_index=0,
-                stop_index=0,
+                stop_index=1,
             )
         )
 
@@ -451,7 +451,7 @@ class ComplementedCharacterClassExpression(
                     rule_name or str(self),
                     expected_message=self.to_expected_message(),
                     start_index=index,
-                    stop_index=index,
+                    stop_index=index + 1,
                 )
             )
         character = text[index]
@@ -489,7 +489,7 @@ class ComplementedCharacterClassExpression(
                 rule_name or str(self),
                 expected_message='',
                 start_index=0,
-                stop_index=0,
+                stop_index=1,
             )
         )
 
@@ -614,7 +614,7 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
                         str(self._expression),
                         expected_message='',
                         start_index=0,
-                        stop_index=0,
+                        stop_index=1,
                     )
                 ],
             )
@@ -729,7 +729,7 @@ class LiteralExpression(Expression[MatchLeaf, MismatchLeaf]):
                 rule_name or str(self),
                 expected_message='',
                 start_index=0,
-                stop_index=0,
+                stop_index=1,
             )
         )
 
@@ -879,7 +879,7 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
                 rule_name or str(self),
                 expected_message='',
                 start_index=0,
-                stop_index=0,
+                stop_index=1,
             )
         )
 
@@ -1009,7 +1009,7 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
                         str(self._expression),
                         expected_message='',
                         start_index=0,
-                        stop_index=0,
+                        stop_index=1,
                     )
                 ],
             )
@@ -1205,7 +1205,7 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
                 rule_name or str(self),
                 expected_message='',
                 start_index=0,
-                stop_index=0,
+                stop_index=1,
             )
         )
 
@@ -1339,7 +1339,7 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
                         str(self._expression),
                         expected_message='',
                         start_index=0,
-                        stop_index=0,
+                        stop_index=1,
                     )
                 ],
             )
@@ -1500,7 +1500,7 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
                         str(self._expression),
                         expected_message='',
                         start_index=0,
-                        stop_index=0,
+                        stop_index=1,
                     )
                 ],
             )
@@ -1557,14 +1557,14 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
 
 
 @final
-class PrioritizedChoiceExpression(Expression[MatchT_co, MismatchTree]):
+class PrioritizedChoiceExpression(Expression[AnyMatch, MismatchTree]):
     @classmethod
     @override
     def precedence(cls, /) -> int:
         return ExpressionPrecedence.PRIORITIZED_CHOICE
 
     @property
-    def variants(self, /) -> Sequence[Expression[MatchT_co, AnyMismatch]]:
+    def variants(self, /) -> Sequence[Expression[AnyMatch, AnyMismatch]]:
         return self._variants
 
     @override
@@ -1617,7 +1617,7 @@ class PrioritizedChoiceExpression(Expression[MatchT_co, MismatchTree]):
         )
 
     @override
-    def to_match_classes(self, /) -> Iterable[type[MatchT_co]]:
+    def to_match_classes(self, /) -> Iterable[type[AnyMatch]]:
         for variant in self._variants:
             yield from variant.to_match_classes()
 
@@ -1637,13 +1637,13 @@ class PrioritizedChoiceExpression(Expression[MatchT_co, MismatchTree]):
                         str(self._variants[0]),
                         expected_message='',
                         start_index=0,
-                        stop_index=0,
+                        stop_index=1,
                     )
                 ],
             )
         )
 
-    _variants: Sequence[Expression[MatchT_co, AnyMismatch]]
+    _variants: Sequence[Expression[AnyMatch, AnyMismatch]]
 
     __slots__ = ('_variants',)
 
@@ -1654,7 +1654,7 @@ class PrioritizedChoiceExpression(Expression[MatchT_co, MismatchTree]):
         )
 
     def __new__(
-        cls, variants: Sequence[Expression[MatchT_co, AnyMismatch]], /
+        cls, variants: Sequence[Expression[AnyMatch, AnyMismatch]], /
     ) -> Self:
         assert len(variants) > 1, variants
         self = super().__new__(cls)
@@ -1677,7 +1677,7 @@ class PrioritizedChoiceExpression(Expression[MatchT_co, MismatchTree]):
 
 
 @final
-class RuleReference(Expression[MatchT_co, MismatchT_co]):
+class RuleReference(Expression[AnyMatch, AnyMismatch]):
     @classmethod
     @override
     def precedence(cls, /) -> int:
@@ -1717,12 +1717,12 @@ class RuleReference(Expression[MatchT_co, MismatchT_co]):
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
-    ) -> EvaluationResult[MatchT_co, MismatchT_co]:
+    ) -> EvaluationResult[AnyMatch, AnyMismatch]:
         return self.resolve().parse(
             text, index, cache=cache, rule_name=self._name
         )
 
-    def resolve(self, /) -> Rule[MatchT_co, MismatchT_co]:
+    def resolve(self, /) -> Rule[AnyMatch, AnyMismatch]:
         return self._rules[self._referent_name]
 
     @override
@@ -1730,24 +1730,24 @@ class RuleReference(Expression[MatchT_co, MismatchT_co]):
         return self.resolve().expression.to_expected_message()
 
     @override
-    def to_match_classes(self) -> Iterable[type[MatchT_co]]:
+    def to_match_classes(self) -> Iterable[type[AnyMatch]]:
         return iter(self._match_classes)
 
     @override
-    def to_mismatch_classes(self, /) -> Iterable[type[MismatchT_co]]:
+    def to_mismatch_classes(self, /) -> Iterable[type[AnyMismatch]]:
         return iter(self._mismatch_classes)
 
     @override
     def to_seed_failure(
         self, rule_name: str | None, /
-    ) -> EvaluationFailure[MismatchT_co]:
+    ) -> EvaluationFailure[AnyMismatch]:
         return self.resolve().expression.to_seed_failure(rule_name)
 
-    _match_classes: Sequence[type[MatchT_co]]
-    _mismatch_classes: Sequence[type[MismatchT_co]]
+    _match_classes: Sequence[type[AnyMatch]]
+    _mismatch_classes: Sequence[type[AnyMismatch]]
     _name: str
     _referent_name: str
-    _rules: Mapping[str, Rule[MatchT_co, MismatchT_co]]
+    _rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
 
     __slots__ = (
         '_match_classes',
@@ -1769,9 +1769,9 @@ class RuleReference(Expression[MatchT_co, MismatchT_co]):
         referent_name: str,
         /,
         *,
-        match_classes: Sequence[type[MatchT_co]],
-        mismatch_classes: Sequence[type[MismatchT_co]],
-        rules: Mapping[str, Rule[MatchT_co, MismatchT_co]],
+        match_classes: Sequence[type[AnyMatch]],
+        mismatch_classes: Sequence[type[AnyMismatch]],
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> Self:
         assert len(name) > 0, name
         self = super().__new__(cls)
@@ -1916,7 +1916,7 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
                         str(self._elements[0]),
                         expected_message='',
                         start_index=0,
-                        stop_index=0,
+                        stop_index=1,
                     )
                 ],
             )
@@ -2047,7 +2047,7 @@ class ZeroOrMoreExpression(
                         str(self._expression),
                         expected_message='',
                         start_index=0,
-                        stop_index=0,
+                        stop_index=1,
                     )
                 ],
             )

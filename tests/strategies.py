@@ -2,292 +2,139 @@ import string
 from _operator import add
 from collections.abc import Callable, Mapping, Sequence
 from enum import IntEnum, auto
-from functools import partial
-from typing import Any, Final, Literal, TypeAlias, TypeVar
+from functools import partial, wraps
+from operator import itemgetter
+from typing import Any, Final, TypeVar
 
 from hypothesis import strategies as st
+from typing_extensions import Unpack
 
 from pagen.models import (
-    AnyCharacterExpressionBuilder,
-    CharacterClassExpressionBuilder,
     CharacterRange,
     CharacterSet,
-    ComplementedCharacterClassExpressionBuilder,
-    DoubleQuotedLiteralExpressionBuilder,
     ExactRepetitionExpression,
-    ExactRepetitionExpressionBuilder,
-    ExpressionBuilder,
     GrammarBuilder,
-    NegativeLookaheadExpressionBuilder,
-    OneOrMoreExpressionBuilder,
-    OptionalExpressionBuilder,
-    PositiveLookaheadExpressionBuilder,
     PositiveOrMoreExpression,
-    PositiveOrMoreExpressionBuilder,
     PositiveRepetitionRangeExpression,
-    PositiveRepetitionRangeExpressionBuilder,
-    PrioritizedChoiceExpressionBuilder,
-    RuleReferenceBuilder,
-    SequenceExpressionBuilder,
-    SingleQuotedLiteralExpressionBuilder,
-    ZeroOrMoreExpressionBuilder,
     ZeroRepetitionRangeExpression,
-    ZeroRepetitionRangeExpressionBuilder,
 )
 
 MAX_EXPRESSION_BUILDER_ELEMENTS_COUNT: Final[int] = 8
 MAX_REPETITION_RANGE_BOUND: Final[int] = 16
 
 
-class ExpressionBuilderCategory(IntEnum):
+class ExpressionCategory(IntEnum):
     MAYBE_NON_PROGRESSING = auto()
     PROGRESSING = auto()
 
 
-MaybeNonProgressingExpressionBuilder: TypeAlias = (
-    NegativeLookaheadExpressionBuilder
-    | OptionalExpressionBuilder
-    | PositiveLookaheadExpressionBuilder
-    | ZeroOrMoreExpressionBuilder
-    | ZeroRepetitionRangeExpressionBuilder
-)
-ProgressingRepetitionExpressionBuilder: TypeAlias = (
-    ExactRepetitionExpressionBuilder
-    | OneOrMoreExpressionBuilder
-    | PositiveRepetitionRangeExpressionBuilder
-    | PositiveOrMoreExpressionBuilder
-)
-_ExpressionBuilderT = TypeVar(
-    '_ExpressionBuilderT',
-    AnyCharacterExpressionBuilder,
-    DoubleQuotedLiteralExpressionBuilder,
-    CharacterClassExpressionBuilder,
-    ComplementedCharacterClassExpressionBuilder,
-    ProgressingRepetitionExpressionBuilder,
-    ZeroRepetitionRangeExpressionBuilder,
-    SingleQuotedLiteralExpressionBuilder,
-    NegativeLookaheadExpressionBuilder,
-    OneOrMoreExpressionBuilder,
-    OptionalExpressionBuilder,
-    PositiveLookaheadExpressionBuilder,
-    PrioritizedChoiceExpressionBuilder[Any],
-    RuleReferenceBuilder[Any, Any],
-    SequenceExpressionBuilder,
-    ZeroOrMoreExpressionBuilder,
-)
-ExpressionBuilderFactory: TypeAlias = Callable[
-    [
-        Mapping[str, _ExpressionBuilderT],
-        Mapping[ExpressionBuilderCategory, Sequence[str]],
-    ],
-    _ExpressionBuilderT,
-]
+CategorizedRuleNames = Mapping[ExpressionCategory, Sequence[str]]
+ExpressionRegistrator = Callable[[GrammarBuilder, CategorizedRuleNames], int]
 
 
-def to_expression_builders_strategy(
+_T = TypeVar('_T')
+
+
+def partial_right(
+    function: Callable[..., _T], *tail_args: Any, **tail_kwargs: Any
+) -> Callable[..., _T]:
+    @wraps(function)
+    def wrapped(*head_args: Any, **head_kwargs: Any) -> _T:
+        return function(*head_args, *tail_args, **head_kwargs, **tail_kwargs)
+
+    return wrapped
+
+
+def to_grammar_builder_strategy(
     *, with_lookahead: bool
-) -> st.SearchStrategy[Mapping[str, ExpressionBuilder]]:
-    def to_categorized_prioritized_choice_expression_builder_factory(
-        categorized_offsets: Sequence[tuple[ExpressionBuilderCategory, int]], /
-    ) -> tuple[ExpressionBuilderCategory, ExpressionBuilderFactory[Any]]:
-        def expression_builder_factory(
-            expression_builders: Mapping[str, ExpressionBuilder],
-            categorized_rule_names: Mapping[
-                ExpressionBuilderCategory, Sequence[str]
-            ],
-            /,
-        ) -> PrioritizedChoiceExpressionBuilder[Any]:
-            return PrioritizedChoiceExpressionBuilder(
-                [
-                    RuleReferenceBuilder(
-                        categorized_rule_names[category][
-                            offset % len(categorized_rule_names[category])
-                        ],
-                        expression_builders=expression_builders,
-                    )
-                    for category, offset in categorized_offsets
-                ]
-            )
-
-        return (
-            (
-                ExpressionBuilderCategory.PROGRESSING
-                if all(
-                    category is ExpressionBuilderCategory.PROGRESSING
-                    for category, _ in categorized_offsets
-                )
-                else ExpressionBuilderCategory.MAYBE_NON_PROGRESSING
-            ),
-            expression_builder_factory,
-        )
-
-    def to_categorized_progressing_expression_builder(
-        categorized_offset: tuple[
-            Literal[ExpressionBuilderCategory.PROGRESSING], int
-        ],
-        /,
-        *args: Any,
-        expression_builder_cls: type[ProgressingRepetitionExpressionBuilder],
-    ) -> tuple[
-        Literal[ExpressionBuilderCategory.PROGRESSING],
-        ExpressionBuilderFactory[ProgressingRepetitionExpressionBuilder],
-    ]:
-        category, offset = categorized_offset
-        assert category is ExpressionBuilderCategory.PROGRESSING, category
-
-        def expression_builder_factory(
-            expression_builders: Mapping[str, ExpressionBuilder],
-            categorized_rule_names: Mapping[
-                ExpressionBuilderCategory, Sequence[str]
-            ],
-            /,
-        ) -> ProgressingRepetitionExpressionBuilder:
-            return expression_builder_cls(
-                RuleReferenceBuilder(
-                    categorized_rule_names[category][
-                        offset % len(categorized_rule_names[category])
-                    ],
-                    expression_builders=expression_builders,
-                ),
-                *args,
-            )
-
-        return (
-            ExpressionBuilderCategory.PROGRESSING,
-            expression_builder_factory,
-        )
-
-    def to_categorized_sequence_expression_builder_factory(
-        categorized_offsets: Sequence[tuple[ExpressionBuilderCategory, int]], /
-    ) -> tuple[
-        Literal[ExpressionBuilderCategory.PROGRESSING],
-        ExpressionBuilderFactory[Any],
-    ]:
-        def expression_builder_factory(
-            expression_builders: Mapping[str, ExpressionBuilder],
-            categorized_rule_names: Mapping[
-                ExpressionBuilderCategory, Sequence[str]
-            ],
-            /,
-        ) -> SequenceExpressionBuilder:
-            return SequenceExpressionBuilder(
-                [
-                    RuleReferenceBuilder(
-                        categorized_rule_names[category][
-                            offset % len(categorized_rule_names[category])
-                        ],
-                        expression_builders=expression_builders,
-                    )
-                    for category, offset in categorized_offsets
-                ]
-            )
-
-        return (
-            ExpressionBuilderCategory.PROGRESSING,
-            expression_builder_factory,
-        )
-
-    def to_categorized_lookahead_expression_builder(
-        categorized_offset: tuple[
-            Literal[ExpressionBuilderCategory.PROGRESSING], int
-        ],
-        /,
-        *args: Any,
-        expression_builder_cls: type[MaybeNonProgressingExpressionBuilder],
-    ) -> tuple[
-        Literal[ExpressionBuilderCategory.MAYBE_NON_PROGRESSING],
-        ExpressionBuilderFactory[Any],
-    ]:
-        category, offset = categorized_offset
-        assert category is ExpressionBuilderCategory.PROGRESSING, category
-
-        def expression_builder_factory(
-            expression_builders: Mapping[str, ExpressionBuilder],
-            categorized_rule_names: Mapping[
-                ExpressionBuilderCategory, Sequence[str]
-            ],
-            /,
-        ) -> ExpressionBuilder:
-            return expression_builder_cls(
-                RuleReferenceBuilder(
-                    categorized_rule_names[category][
-                        offset % len(categorized_rule_names[category])
-                    ],
-                    expression_builders=expression_builders,
-                ),
-                *args,
-            )
-
-        return (
-            ExpressionBuilderCategory.MAYBE_NON_PROGRESSING,
-            expression_builder_factory,
-        )
-
+) -> st.SearchStrategy[GrammarBuilder]:
     def build_builders(
-        categorized_expression_builder_factories: Mapping[
-            str,
-            tuple[
-                ExpressionBuilderCategory,
-                ExpressionBuilderFactory[_ExpressionBuilderT],
-            ],
+        categorized_rule_expression_registrators: Mapping[
+            str, tuple[ExpressionCategory, ExpressionRegistrator]
         ],
         /,
-    ) -> Mapping[str, _ExpressionBuilderT]:
-        result: dict[str, _ExpressionBuilderT] = {}
-        categorized_rule_names: dict[ExpressionBuilderCategory, list[str]] = {}
+    ) -> GrammarBuilder:
+        result = GrammarBuilder()
+        rule_names: dict[ExpressionCategory, list[str]] = {
+            expression_category: []
+            for expression_category in ExpressionCategory
+        }
         for rule_name, (
-            expression_builder_category,
+            expression_category,
             _,
-        ) in categorized_expression_builder_factories.items():
-            categorized_rule_names.setdefault(
-                expression_builder_category, []
-            ).append(rule_name)
-            if (
-                expression_builder_category
-                is ExpressionBuilderCategory.PROGRESSING
-            ):
-                categorized_rule_names.setdefault(
-                    ExpressionBuilderCategory.MAYBE_NON_PROGRESSING, []
-                ).append(rule_name)
+        ) in categorized_rule_expression_registrators.items():
+            rule_names[expression_category].append(rule_name)
         for rule_name, (
             _,
-            expression_builder_factory,
-        ) in categorized_expression_builder_factories.items():
-            result[rule_name] = expression_builder_factory(
-                result, categorized_rule_names
+            expression_registrator,
+        ) in categorized_rule_expression_registrators.items():
+            result.add_rule(
+                rule_name, expression_registrator(result, rule_names)
             )
         return result
 
-    progressing_offset_strategy: st.SearchStrategy[
-        tuple[Literal[ExpressionBuilderCategory.PROGRESSING], int]
-    ] = st.tuples(
-        st.just(ExpressionBuilderCategory.PROGRESSING), st.integers(0)
-    )
-    any_category_offset_strategy = st.tuples(
-        st.sampled_from(tuple(ExpressionBuilderCategory)), st.integers(0)
-    )
-
-    def to_maybe_non_progressing_expression_builders(
-        base: st.SearchStrategy[
-            AnyCharacterExpressionBuilder
-            | CharacterClassExpressionBuilder
-            | ComplementedCharacterClassExpressionBuilder
-            | DoubleQuotedLiteralExpressionBuilder
-            | SingleQuotedLiteralExpressionBuilder
-            | PrioritizedChoiceExpressionBuilder[Any]
-            | ProgressingRepetitionExpressionBuilder
-            | SequenceExpressionBuilder
+    def to_maybe_non_progressing_expression_registrators(
+        progressing_expression_registrator_strategy: st.SearchStrategy[
+            ExpressionRegistrator
         ],
         /,
-    ) -> st.SearchStrategy[MaybeNonProgressingExpressionBuilder]:
-        variants: list[
-            st.SearchStrategy[MaybeNonProgressingExpressionBuilder]
-        ] = [
-            base.map(OptionalExpressionBuilder),
-            base.map(ZeroOrMoreExpressionBuilder),
+    ) -> st.SearchStrategy[ExpressionRegistrator]:
+        def register_optional_expression(
+            grammar_builder: GrammarBuilder,
+            categorized_rule_names: CategorizedRuleNames,
+            expression_registrator: ExpressionRegistrator,
+            /,
+        ) -> int:
+            return grammar_builder.optional_expression(
+                expression_registrator(grammar_builder, categorized_rule_names)
+            )
+
+        def register_zero_or_more_expression(
+            grammar_builder: GrammarBuilder,
+            categorized_rule_names: CategorizedRuleNames,
+            expression_registrator: ExpressionRegistrator,
+            /,
+        ) -> int:
+            return grammar_builder.zero_or_more_expression(
+                expression_registrator(grammar_builder, categorized_rule_names)
+            )
+
+        def register_zero_repetition_range_expression(
+            grammar_builder: GrammarBuilder,
+            categorized_rule_names: CategorizedRuleNames,
+            expression_registrator: ExpressionRegistrator,
+            end: int,
+            /,
+        ) -> int:
+            return grammar_builder.zero_repetition_range_expression(
+                expression_registrator(
+                    grammar_builder, categorized_rule_names
+                ),
+                end,
+            )
+
+        variants: list[st.SearchStrategy[ExpressionRegistrator]] = [
             st.builds(
-                ZeroRepetitionRangeExpressionBuilder,
-                base,
+                partial(
+                    partial_right,
+                    register_rule_reference,
+                    expression_category=(
+                        ExpressionCategory.MAYBE_NON_PROGRESSING
+                    ),
+                ),
+                st.integers(0),
+            ),
+            progressing_expression_registrator_strategy.map(
+                partial(partial_right, register_optional_expression)
+            ),
+            progressing_expression_registrator_strategy.map(
+                partial(partial_right, register_zero_or_more_expression)
+            ),
+            st.builds(
+                partial(
+                    partial_right, register_zero_repetition_range_expression
+                ),
+                progressing_expression_registrator_strategy,
                 st.integers(
                     ZeroRepetitionRangeExpression.MIN_END,
                     MAX_REPETITION_RANGE_BOUND,
@@ -295,10 +142,45 @@ def to_expression_builders_strategy(
             ),
         ]
         if with_lookahead:
+
+            def register_negative_lookahead_expression(
+                grammar_builder: GrammarBuilder,
+                categorized_rule_names: CategorizedRuleNames,
+                expression_registrator: ExpressionRegistrator,
+                /,
+            ) -> int:
+                return grammar_builder.negative_lookahead_expression(
+                    expression_registrator(
+                        grammar_builder, categorized_rule_names
+                    )
+                )
+
+            def register_positive_lookahead_expression(
+                grammar_builder: GrammarBuilder,
+                categorized_rule_names: CategorizedRuleNames,
+                expression_registrator: ExpressionRegistrator,
+                /,
+            ) -> int:
+                return grammar_builder.positive_lookahead_expression(
+                    expression_registrator(
+                        grammar_builder, categorized_rule_names
+                    )
+                )
+
             variants.extend(
                 [
-                    base.map(NegativeLookaheadExpressionBuilder),
-                    base.map(PositiveLookaheadExpressionBuilder),
+                    progressing_expression_registrator_strategy.map(
+                        partial(
+                            partial_right,
+                            register_negative_lookahead_expression,
+                        )
+                    ),
+                    progressing_expression_registrator_strategy.map(
+                        partial(
+                            partial_right,
+                            register_positive_lookahead_expression,
+                        )
+                    ),
                 ]
             )
         return st.one_of(variants)
@@ -311,51 +193,102 @@ def to_expression_builders_strategy(
         key='start',
     )
 
-    def extend_progressing_non_recursive_expression_builders(
-        step: st.SearchStrategy[
-            AnyCharacterExpressionBuilder
-            | CharacterClassExpressionBuilder
-            | ComplementedCharacterClassExpressionBuilder
-            | DoubleQuotedLiteralExpressionBuilder
-            | SingleQuotedLiteralExpressionBuilder
-            | PrioritizedChoiceExpressionBuilder[Any]
-            | ProgressingRepetitionExpressionBuilder
-            | SequenceExpressionBuilder
-        ],
-        /,
-    ) -> st.SearchStrategy[
-        PrioritizedChoiceExpressionBuilder[Any]
-        | ProgressingRepetitionExpressionBuilder
-        | SequenceExpressionBuilder
-    ]:
-        prioritized_choice_expression_builder_strategy: st.SearchStrategy[
-            PrioritizedChoiceExpressionBuilder[Any]
-        ] = st.lists(
-            step, min_size=2, max_size=MAX_EXPRESSION_BUILDER_ELEMENTS_COUNT
-        ).map(
-            PrioritizedChoiceExpressionBuilder  # pyright: ignore[reportArgumentType]
-        )
+    def extend_progressing_expression_registrators(
+        step_strategy: st.SearchStrategy[ExpressionRegistrator], /
+    ) -> st.SearchStrategy[ExpressionRegistrator]:
+        def register_wrapping_expression(
+            grammar_builder: GrammarBuilder,
+            categorized_rule_names: CategorizedRuleNames,
+            result_expression_registrator: Callable[
+                [GrammarBuilder, int, Unpack[tuple[Any, ...]]], int
+            ],
+            wrapped_expression_registrator: ExpressionRegistrator,
+            /,
+            *args: Any,
+        ) -> int:
+            return result_expression_registrator(
+                grammar_builder,
+                wrapped_expression_registrator(
+                    grammar_builder, categorized_rule_names
+                ),
+                *args,
+            )
+
+        def register_prioritized_choice_expression(
+            grammar_builder: GrammarBuilder,
+            categorized_rule_names: CategorizedRuleNames,
+            variant_registrators: Sequence[ExpressionRegistrator],
+            /,
+        ) -> int:
+            return grammar_builder.prioritized_choice_expression(
+                [
+                    variant_registrator(
+                        grammar_builder, categorized_rule_names
+                    )
+                    for variant_registrator in variant_registrators
+                ]
+            )
+
+        def register_sequence_expression(
+            grammar_builder: GrammarBuilder,
+            categorized_rule_names: CategorizedRuleNames,
+            element_registrators: Sequence[ExpressionRegistrator],
+            /,
+        ) -> int:
+            return grammar_builder.sequence_expression(
+                [
+                    element_registrator(
+                        grammar_builder, categorized_rule_names
+                    )
+                    for element_registrator in element_registrators
+                ]
+            )
+
+        def insert_by_offset(
+            sequence: Sequence[_T], value: _T, offset: int, /
+        ) -> Sequence[_T]:
+            index = offset % len(sequence)
+            return [*sequence[:index], value, *sequence[index:]]
+
         return st.one_of(
             st.builds(
-                ExactRepetitionExpressionBuilder,
-                step,
+                partial(
+                    partial_right,
+                    register_wrapping_expression,
+                    GrammarBuilder.exact_repetition_expression,
+                ),
+                step_strategy,
                 st.integers(
                     ExactRepetitionExpression.MIN_COUNT,
                     MAX_REPETITION_RANGE_BOUND,
                 ),
             ),
-            step.map(OneOrMoreExpressionBuilder),
+            step_strategy.map(
+                partial(
+                    partial_right,
+                    register_wrapping_expression,
+                    GrammarBuilder.one_or_more_expression,
+                )
+            ),
             st.builds(
-                PositiveOrMoreExpressionBuilder,
-                step,
+                partial(
+                    partial_right,
+                    register_wrapping_expression,
+                    GrammarBuilder.positive_or_more_expression,
+                ),
+                step_strategy,
                 st.integers(
                     PositiveOrMoreExpression.MIN_START,
                     MAX_REPETITION_RANGE_BOUND,
                 ),
             ),
             st.builds(
-                PositiveRepetitionRangeExpressionBuilder,
-                step,
+                partial(
+                    partial_right,
+                    register_wrapping_expression,
+                    GrammarBuilder.positive_repetition_range_expression,
+                ),
+                step_strategy,
                 shared_positive_repetition_range_start_strategy,
                 st.builds(
                     add,
@@ -363,211 +296,176 @@ def to_expression_builders_strategy(
                     st.integers(1, MAX_REPETITION_RANGE_BOUND // 2),
                 ),
             ),
-            prioritized_choice_expression_builder_strategy,
-            (
-                st.lists(
-                    step | to_maybe_non_progressing_expression_builders(step),
-                    min_size=2,
-                    max_size=MAX_EXPRESSION_BUILDER_ELEMENTS_COUNT,
-                )
-                .filter(
-                    lambda element_builders: any(
-                        not isinstance(
-                            element_builder,
-                            MaybeNonProgressingExpressionBuilder,
-                        )
-                        for element_builder in element_builders
-                    )
-                )
-                .map(SequenceExpressionBuilder)
+            st.lists(
+                step_strategy,
+                min_size=2,
+                max_size=MAX_EXPRESSION_BUILDER_ELEMENTS_COUNT,
+            ).map(
+                partial(partial_right, register_prioritized_choice_expression)
             ),
+            st.builds(
+                insert_by_offset,
+                (
+                    st.lists(
+                        step_strategy.map(
+                            lambda expression_registrator: (
+                                ExpressionCategory.PROGRESSING,
+                                expression_registrator,
+                            )
+                        )
+                        | to_maybe_non_progressing_expression_registrators(
+                            step_strategy
+                        ).map(
+                            lambda expression_registrator: (
+                                ExpressionCategory.MAYBE_NON_PROGRESSING,
+                                expression_registrator,
+                            )
+                        ),
+                        min_size=1,
+                        max_size=MAX_EXPRESSION_BUILDER_ELEMENTS_COUNT,
+                    )
+                    .filter(
+                        lambda categorized_expression_registrators: any(
+                            (
+                                expression_category
+                                is ExpressionCategory.PROGRESSING
+                            )
+                            for expression_category, _ in (
+                                categorized_expression_registrators
+                            )
+                        )
+                    )
+                    .map(partial(map, itemgetter(1)))
+                    .map(list)
+                ),
+                step_strategy,
+                st.integers(0),
+            ).map(partial(partial_right, register_sequence_expression)),
         )
 
     character_range_strategy = st.lists(
         st.characters(), min_size=2, max_size=2, unique=True
     ).map(lambda character_pair: CharacterRange(*sorted(character_pair)))
     character_set_strategy = st.builds(CharacterSet, st.text(min_size=1))
-    non_recursive_progressing_expression_builders = st.recursive(
+
+    def register_rule_reference(
+        grammar_builder: GrammarBuilder,
+        categorized_rule_names: CategorizedRuleNames,
+        offset: int,
+        /,
+        *,
+        expression_category: ExpressionCategory,
+    ) -> int:
+        category_rule_names = categorized_rule_names[expression_category]
+        if len(category_rule_names) == 0:
+            assert (
+                expression_category is ExpressionCategory.MAYBE_NON_PROGRESSING
+            )
+            category_rule_names = categorized_rule_names[
+                ExpressionCategory.PROGRESSING
+            ]
+        return grammar_builder.rule_reference(
+            category_rule_names[offset % len(category_rule_names)]
+        )
+
+    def to_skipping_rule_names_expression_registrator(
+        function: Callable[[GrammarBuilder], int], /
+    ) -> ExpressionRegistrator:
+        @wraps(function)
+        def wrapped(
+            grammar_builder: GrammarBuilder,
+            categorized_rule_names: CategorizedRuleNames,
+            /,
+        ) -> int:
+            return function(grammar_builder)
+
+        return wrapped
+
+    plain_progressing_expression_registrators: st.SearchStrategy[
+        ExpressionRegistrator
+    ] = st.recursive(
         st.one_of(
             [
-                st.builds(AnyCharacterExpressionBuilder),
-                st.builds(
-                    DoubleQuotedLiteralExpressionBuilder,
-                    string_literal_value_strategy,
+                st.just(
+                    to_skipping_rule_names_expression_registrator(
+                        GrammarBuilder.any_character_expression
+                    )
                 ),
                 st.builds(
-                    SingleQuotedLiteralExpressionBuilder,
-                    string_literal_value_strategy,
+                    partial(
+                        partial_right,
+                        partial(
+                            register_rule_reference,
+                            expression_category=ExpressionCategory.PROGRESSING,
+                        ),
+                    ),
+                    st.integers(0),
                 ),
+                string_literal_value_strategy.map(
+                    partial(
+                        partial_right,
+                        GrammarBuilder.double_quoted_literal_expression,
+                    )
+                ).map(to_skipping_rule_names_expression_registrator),
+                string_literal_value_strategy.map(
+                    partial(
+                        partial_right,
+                        GrammarBuilder.single_quoted_literal_expression,
+                    )
+                ).map(to_skipping_rule_names_expression_registrator),
                 st.builds(
-                    CharacterClassExpressionBuilder,
+                    partial(
+                        partial_right,
+                        GrammarBuilder.character_class_expression,
+                    ),
                     st.lists(
                         character_range_strategy | character_set_strategy,
                         min_size=1,
                         max_size=MAX_EXPRESSION_BUILDER_ELEMENTS_COUNT,
                     ),
-                ),
+                ).map(to_skipping_rule_names_expression_registrator),
                 st.builds(
-                    ComplementedCharacterClassExpressionBuilder,
+                    partial(
+                        partial_right,
+                        GrammarBuilder.complemented_character_class_expression,
+                    ),
                     st.lists(
                         character_range_strategy | character_set_strategy,
                         min_size=1,
                         max_size=MAX_EXPRESSION_BUILDER_ELEMENTS_COUNT,
                     ),
-                ),
+                ).map(to_skipping_rule_names_expression_registrator),
             ]
         ),
-        extend_progressing_non_recursive_expression_builders,
+        extend_progressing_expression_registrators,
         max_leaves=3,
     )
     return (
         st.dictionaries(
             rule_name_strategy,
-            st.one_of(
-                [
-                    non_recursive_progressing_expression_builders.map(
-                        lambda builder: (
-                            ExpressionBuilderCategory.PROGRESSING,
-                            lambda expression_builders, rule_names, /: builder,
-                        )
-                    ),
-                    to_maybe_non_progressing_expression_builders(
-                        non_recursive_progressing_expression_builders
-                    ).map(
-                        lambda builder: (
-                            ExpressionBuilderCategory.MAYBE_NON_PROGRESSING,
-                            lambda expression_builders, rule_names, /: builder,
-                        )
-                    ),
-                    st.builds(
-                        partial(
-                            to_categorized_progressing_expression_builder,
-                            expression_builder_cls=(
-                                ExactRepetitionExpressionBuilder
-                            ),
-                        ),
-                        progressing_offset_strategy,
-                        st.integers(
-                            ExactRepetitionExpression.MIN_COUNT,
-                            MAX_REPETITION_RANGE_BOUND,
-                        ),
-                    ),
-                    progressing_offset_strategy.map(
-                        partial(
-                            to_categorized_progressing_expression_builder,
-                            expression_builder_cls=OneOrMoreExpressionBuilder,
-                        )
-                    ),
-                    st.builds(
-                        partial(
-                            to_categorized_progressing_expression_builder,
-                            expression_builder_cls=(
-                                PositiveOrMoreExpressionBuilder
-                            ),
-                        ),
-                        progressing_offset_strategy,
-                        st.integers(
-                            PositiveOrMoreExpression.MIN_START,
-                            MAX_REPETITION_RANGE_BOUND,
-                        ),
-                    ),
-                    st.builds(
-                        partial(
-                            to_categorized_progressing_expression_builder,
-                            expression_builder_cls=(
-                                PositiveRepetitionRangeExpressionBuilder
-                            ),
-                        ),
-                        progressing_offset_strategy,
-                        shared_positive_repetition_range_start_strategy,
-                        st.builds(
-                            add,
-                            shared_positive_repetition_range_start_strategy,
-                            st.integers(1, MAX_REPETITION_RANGE_BOUND // 2),
-                        ),
-                    ),
-                    progressing_offset_strategy.map(
-                        partial(
-                            to_categorized_lookahead_expression_builder,
-                            expression_builder_cls=OptionalExpressionBuilder,
-                        )
-                    ),
-                    progressing_offset_strategy.map(
-                        partial(
-                            to_categorized_lookahead_expression_builder,
-                            expression_builder_cls=ZeroOrMoreExpressionBuilder,
-                        )
-                    ),
-                    st.builds(
-                        partial(
-                            to_categorized_lookahead_expression_builder,
-                            expression_builder_cls=(
-                                ZeroRepetitionRangeExpressionBuilder
-                            ),
-                        ),
-                        progressing_offset_strategy,
-                        st.integers(
-                            ZeroRepetitionRangeExpression.MIN_END,
-                            MAX_REPETITION_RANGE_BOUND,
-                        ),
-                    ),
-                    st.lists(
-                        any_category_offset_strategy,
-                        min_size=2,
-                        max_size=MAX_EXPRESSION_BUILDER_ELEMENTS_COUNT,
-                    ).map(
-                        to_categorized_prioritized_choice_expression_builder_factory
-                    ),
-                    (
-                        st.lists(
-                            any_category_offset_strategy,
-                            min_size=2,
-                            max_size=MAX_EXPRESSION_BUILDER_ELEMENTS_COUNT,
-                        )
-                        .filter(
-                            lambda categorized_offsets: any(
-                                (
-                                    category
-                                    is ExpressionBuilderCategory.PROGRESSING
-                                )
-                                for category, _ in categorized_offsets
-                            )
-                        )
-                        .map(
-                            to_categorized_sequence_expression_builder_factory
-                        )
-                    ),
-                ]
-                + (
-                    [
-                        progressing_offset_strategy.map(
-                            partial(
-                                to_categorized_lookahead_expression_builder,
-                                expression_builder_cls=(
-                                    NegativeLookaheadExpressionBuilder
-                                ),
-                            )
-                        ),
-                        progressing_offset_strategy.map(
-                            partial(
-                                to_categorized_lookahead_expression_builder,
-                                expression_builder_cls=(
-                                    PositiveLookaheadExpressionBuilder
-                                ),
-                            )
-                        ),
-                    ]
-                    if with_lookahead
-                    else []
+            (
+                plain_progressing_expression_registrators.map(
+                    lambda expression_registrator: (
+                        ExpressionCategory.PROGRESSING,
+                        expression_registrator,
+                    )
+                )
+                | to_maybe_non_progressing_expression_registrators(
+                    plain_progressing_expression_registrators
+                ).map(
+                    lambda expression_registrator: (
+                        ExpressionCategory.MAYBE_NON_PROGRESSING,
+                        expression_registrator,
+                    )
                 )
             ),
             min_size=1,
         )
         .filter(
-            lambda categorized_expression_builder_factories: any(
-                category is ExpressionBuilderCategory.PROGRESSING
-                for category, _ in (
-                    categorized_expression_builder_factories.values()
+            lambda rule_expression_registrators: any(
+                expression_category is ExpressionCategory.PROGRESSING
+                for expression_category, _ in (
+                    rule_expression_registrators.values()
                 )
             )
         )
@@ -582,12 +480,10 @@ rule_name_strategy: st.SearchStrategy[str] = st.builds(
     st.text(st.sampled_from(identifier_start_characters + string.digits)),
 )
 string_literal_value_strategy = st.text(min_size=1)
-grammar_builder_strategy = st.builds(
-    GrammarBuilder, to_expression_builders_strategy(with_lookahead=False)
-)
+grammar_builder_strategy = to_grammar_builder_strategy(with_lookahead=False)
 
 
-def is_valid_grammar_builder(value: GrammarBuilder[Any, Any], /) -> bool:
+def is_valid_grammar_builder(value: GrammarBuilder, /) -> bool:
     try:
         value.build()
     except ValueError:

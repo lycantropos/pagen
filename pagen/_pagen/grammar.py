@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Iterable, Mapping, Sequence
 from functools import total_ordering
-from typing import Any, Generic, TypeAlias, final, overload
+from typing import Any, ClassVar, Generic, TypeAlias, final, overload
 
 from typing_extensions import Self, override
 
@@ -19,6 +19,8 @@ MismatchOriginPath: TypeAlias = Sequence[str]
 
 
 class Grammar(Generic[MatchT_co, MismatchT_co]):
+    MIN_RULES_COUNT: ClassVar[int] = 1
+
     @property
     def rules(self, /) -> Mapping[str, Rule[MatchT_co, MismatchT_co]]:
         return self._rules
@@ -46,7 +48,7 @@ class Grammar(Generic[MatchT_co, MismatchT_co]):
                 grouped_origin_path_with_expected_message_pairs.setdefault(
                     (start_position, stop_position), []
                 ).append((origin_path, expected_message))
-            lines = value.splitlines()
+            lines = value.split('\n')
             raise ExceptionGroup(
                 (
                     'Failed to parse the input starting '
@@ -92,6 +94,15 @@ class Grammar(Generic[MatchT_co, MismatchT_co]):
         *,
         line_separator: str | None = '\n',
     ) -> Self:
+        if not isinstance(rules, Mapping):
+            raise TypeError(type(rules))
+        if not isinstance(line_separator, str | None):
+            raise TypeError(type(line_separator))
+        if len(rules) < cls.MIN_RULES_COUNT:
+            raise ValueError(
+                f'At least {cls.MIN_RULES_COUNT!r} expected, '
+                f'but got {rules!r}.'
+            )
         self = super().__new__(cls)
         self._line_separator, self._rules = line_separator, rules
         return self
@@ -138,6 +149,16 @@ class ParsingError(Exception):
             origin_path_with_expected_message_pairs
         )
         self._lines = lines
+        assert (
+            len(
+                self._lines[
+                    (
+                        self._start_position.line_number - 1
+                    ) : self._stop_position.line_number
+                ]
+            )
+            > 0
+        ), (start_position, stop_position)
 
     @override
     def __str__(self, /) -> str:
@@ -311,7 +332,7 @@ def _unpack_mismatches(
         if len(separator) == 0:
             (start_position, stop_position) = (
                 TextPosition(1, value.start_index + 1),
-                TextPosition(1, value.stop_index),
+                TextPosition(1, value.stop_index + 1),
             )
         else:
             stop_position = TextPosition(
@@ -341,7 +362,7 @@ def _unpack_mismatches(
     else:
         (start_position, stop_position) = (
             TextPosition(1, value.start_index + 1),
-            TextPosition(1, value.stop_index),
+            TextPosition(1, value.stop_index + 1),
         )
     yield (
         start_position,

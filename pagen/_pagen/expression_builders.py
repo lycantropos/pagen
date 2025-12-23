@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import sys
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, ClassVar, Generic, final
+from types import UnionType
+from typing import Any, ClassVar, Generic, TypeGuard, final
 
 from typing_extensions import Self, override
 
-from . import CharacterRange, CharacterSet
-from .character_containers import merge_consecutive_character_sets
+from .character_containers import (
+    CharacterRange,
+    CharacterSet,
+    merge_consecutive_character_sets,
+)
 from .expressions import (
     AnyCharacterExpression,
     CharacterClassExpression,
@@ -35,54 +40,128 @@ from .rule import Rule
 
 class ExpressionBuilder(ABC, Generic[MatchT_co, MismatchT_co]):
     @abstractmethod
-    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+    def always_matches(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         raise NotImplementedError
 
     @abstractmethod
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any, Any]]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        rules: Mapping[str, Rule[Any, Any]],
     ) -> Expression[MatchT_co, MismatchT_co]:
         raise NotImplementedError
 
     @abstractmethod
-    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
+    def is_left_recursive(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         raise NotImplementedError
 
     @abstractmethod
-    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+    def is_nullable(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         raise NotImplementedError
 
     @abstractmethod
     def is_terminating(
-        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        is_leftmost: bool,
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> bool:
         raise NotImplementedError
 
     def to_match_classes(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[MatchT_co]]:
         yield from self._to_match_classes_impl(
-            visited_rule_names=visited_rule_names
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
         )
 
     def to_mismatch_classes(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[MismatchT_co]]:
         yield from self._to_mismatch_classes_impl(
-            visited_rule_names=visited_rule_names
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
         )
 
     __slots__ = ()
 
     @abstractmethod
     def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[MatchT_co]]:
         raise NotImplementedError
 
     @abstractmethod
     def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[MismatchT_co]]:
         raise NotImplementedError
 
@@ -96,26 +175,68 @@ class AnyCharacterExpressionBuilder(
     ExpressionBuilder[MatchLeaf, MismatchLeaf]
 ):
     @override
-    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+    def always_matches(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return False
 
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any, Any]]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        rules: Mapping[str, Rule[Any, Any]],
     ) -> AnyCharacterExpression:
         return AnyCharacterExpression()
 
     @override
-    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
+    def is_left_recursive(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return False
 
     @override
-    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+    def is_nullable(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return False
 
     @override
     def is_terminating(
-        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        is_leftmost: bool,
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> bool:
         return True
 
@@ -129,13 +250,27 @@ class AnyCharacterExpressionBuilder(
 
     @override
     def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[MatchLeaf]]:
         yield MatchLeaf
 
     @override
     def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[MismatchLeaf]]:
         yield MismatchLeaf
 
@@ -149,26 +284,68 @@ class CharacterClassExpressionBuilder(
     ExpressionBuilder[MatchLeaf, MismatchLeaf]
 ):
     @override
-    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+    def always_matches(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return False
 
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any, Any]]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        rules: Mapping[str, Rule[Any, Any]],
     ) -> CharacterClassExpression:
         return CharacterClassExpression(self._elements)
 
     @override
-    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
+    def is_left_recursive(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return False
 
     @override
-    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+    def is_nullable(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return False
 
     @override
     def is_terminating(
-        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        is_leftmost: bool,
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> bool:
         return True
 
@@ -193,13 +370,27 @@ class CharacterClassExpressionBuilder(
 
     @override
     def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[MatchLeaf]]:
         yield MatchLeaf
 
     @override
     def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[MismatchLeaf]]:
         yield MismatchLeaf
 
@@ -213,26 +404,68 @@ class ComplementedCharacterClassExpressionBuilder(
     ExpressionBuilder[MatchLeaf, MismatchLeaf]
 ):
     @override
-    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+    def always_matches(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return False
 
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any, Any]]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        rules: Mapping[str, Rule[Any, Any]],
     ) -> ComplementedCharacterClassExpression:
         return ComplementedCharacterClassExpression(self._elements)
 
     @override
-    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
+    def is_left_recursive(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return False
 
     @override
-    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+    def is_nullable(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return False
 
     @override
     def is_terminating(
-        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        is_leftmost: bool,
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> bool:
         return True
 
@@ -258,13 +491,27 @@ class ComplementedCharacterClassExpressionBuilder(
 
     @override
     def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[MatchLeaf]]:
         yield MatchLeaf
 
     @override
     def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[MismatchLeaf]]:
         yield MismatchLeaf
 
@@ -277,36 +524,163 @@ class ComplementedCharacterClassExpressionBuilder(
 class ExactRepetitionExpressionBuilder(
     ExpressionBuilder[MatchTree, MismatchTree]
 ):
-    @override
-    def always_matches(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.always_matches(visited_rule_names)
+    @property
+    def expression_builder_index(self, /) -> int:
+        return self._expression_builder_index
 
     @override
-    def build(
-        self, /, *, rules: Mapping[str, Rule[Any, Any]]
-    ) -> ExactRepetitionExpression:
-        _check_that_expression_builder_is_progressing(self._expression_builder)
-        return ExactRepetitionExpression(
-            self._expression_builder.build(rules=rules), self._count
+    def always_matches(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).always_matches(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
         )
 
     @override
-    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_left_recursive(visited_rule_names)
+    def build(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        rules: Mapping[str, Rule[Any, Any]],
+    ) -> ExactRepetitionExpression:
+        expression_builder = self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        )
+        _check_that_expression_builder_is_progressing(
+            expression_builder,
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        )
+        return ExactRepetitionExpression(
+            expression_builder.build(
+                expression_builders=expression_builders,
+                rule_expression_builder_indices=rule_expression_builder_indices,
+                rules=rules,
+            ),
+            self._count,
+        )
 
     @override
-    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+    def is_left_recursive(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_left_recursive(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
+
+    @override
+    def is_nullable(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return False
 
     @override
     def is_terminating(
-        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        is_leftmost: bool,
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> bool:
-        return self._expression_builder.is_terminating(
-            visited_rule_names, is_leftmost=is_leftmost
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_terminating(
+            expression_builders=expression_builders,
+            is_leftmost=is_leftmost,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
         )
 
-    __slots__ = '_count', '_expression_builder'
+    _count: int
+    _expression_builder_index: int
+
+    def _get_expression_builder(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+    ) -> ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]:
+        result = expression_builders[self._expression_builder_index]
+        assert _is_expression_builder(
+            result,
+            expected_match_cls=MatchLeaf | MatchTree,
+            expected_mismatch_cls=AnyMismatch,
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ), result
+        return result
+
+    @override
+    def _to_match_classes_impl(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> Iterable[type[MatchTree]]:
+        yield MatchTree
+
+    @override
+    def _to_mismatch_classes_impl(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> Iterable[type[MismatchTree]]:
+        yield MismatchTree
+
+    __slots__ = '_count', '_expression_builder_index'
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
@@ -315,16 +689,9 @@ class ExactRepetitionExpressionBuilder(
         )
 
     @override
-    def __new__(
-        cls,
-        expression_builder: ExpressionBuilder[
-            MatchLeaf | MatchTree, AnyMismatch
-        ],
-        count: int,
-        /,
-    ) -> Self:
+    def __new__(cls, expression_builder_index: int, count: int, /) -> Self:
         _validate_repetition_expression_builder_bound(count)
-        _validate_expression_builder(expression_builder)
+        _validate_expression_builder_index(expression_builder_index)
         if count < ExactRepetitionExpression.MIN_COUNT:
             raise ValueError(
                 'Repetition count should not be '
@@ -332,45 +699,68 @@ class ExactRepetitionExpressionBuilder(
                 f'but got {count!r}.'
             )
         self = super().__new__(cls)
-        self._count, self._expression_builder = count, expression_builder
+        self._count, self._expression_builder_index = (
+            count,
+            expression_builder_index,
+        )
         return self
 
     @override
-    def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[MatchTree]]:
-        yield MatchTree
-
-    @override
-    def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[MismatchTree]]:
-        yield MismatchTree
-
-    _count: int
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
-
-    @override
     def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self._expression_builder!r})'
+        return f'{type(self).__qualname__}({self._expression_builder_index!r})'
 
 
 class LiteralExpressionBuilder(ExpressionBuilder[MatchLeaf, MismatchLeaf]):
     @override
-    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+    def always_matches(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return False
 
     @override
-    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
+    def is_left_recursive(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return False
 
     @override
-    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+    def is_nullable(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return False
 
     @override
     def is_terminating(
-        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        is_leftmost: bool,
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> bool:
         return True
 
@@ -378,13 +768,27 @@ class LiteralExpressionBuilder(ExpressionBuilder[MatchLeaf, MismatchLeaf]):
 
     @override
     def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[MatchLeaf]]:
         yield MatchLeaf
 
     @override
     def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[MismatchLeaf]]:
         yield MismatchLeaf
 
@@ -393,7 +797,14 @@ class LiteralExpressionBuilder(ExpressionBuilder[MatchLeaf, MismatchLeaf]):
 class DoubleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any, Any]]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        rules: Mapping[str, Rule[Any, Any]],
     ) -> DoubleQuotedLiteralExpression:
         return DoubleQuotedLiteralExpression(self._value)
 
@@ -423,7 +834,14 @@ class DoubleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
 class SingleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any, Any]]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        rules: Mapping[str, Rule[Any, Any]],
     ) -> SingleQuotedLiteralExpression:
         return SingleQuotedLiteralExpression(self._value)
 
@@ -453,50 +871,161 @@ class SingleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
 class NegativeLookaheadExpressionBuilder(
     ExpressionBuilder[LookaheadMatch, MismatchLeaf]
 ):
-    @override
-    def always_matches(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.always_matches(visited_rule_names)
+    @property
+    def expression_builder_index(self, /) -> int:
+        return self._expression_builder_index
 
     @override
-    def build(
-        self, /, *, rules: Mapping[str, Rule[Any, Any]]
-    ) -> NegativeLookaheadExpression:
-        _check_that_expression_builder_is_progressing(self._expression_builder)
-        return NegativeLookaheadExpression(
-            self._expression_builder.build(rules=rules)
+    def always_matches(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).always_matches(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
         )
 
     @override
-    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_left_recursive(visited_rule_names)
+    def build(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        rules: Mapping[str, Rule[Any, Any]],
+    ) -> NegativeLookaheadExpression:
+        expression_builder = self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        )
+        _check_that_expression_builder_is_progressing(
+            expression_builder,
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        )
+        return NegativeLookaheadExpression(
+            expression_builder.build(
+                expression_builders=expression_builders,
+                rule_expression_builder_indices=rule_expression_builder_indices,
+                rules=rules,
+            )
+        )
 
     @override
-    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+    def is_left_recursive(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_left_recursive(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
+
+    @override
+    def is_nullable(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return True
 
     @override
     def is_terminating(
-        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        is_leftmost: bool,
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> bool:
-        return self._expression_builder.is_terminating(
-            visited_rule_names, is_leftmost=is_leftmost
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_terminating(
+            expression_builders=expression_builders,
+            is_leftmost=is_leftmost,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
         )
 
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
+    _expression_builder_index: int
+
+    def _get_expression_builder(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+    ) -> ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]:
+        result = expression_builders[self._expression_builder_index]
+        assert _is_expression_builder(
+            result,
+            expected_match_cls=MatchLeaf | MatchTree,
+            expected_mismatch_cls=AnyMismatch,
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ), result
+        return result
 
     @override
     def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[LookaheadMatch]]:
         yield LookaheadMatch
 
     @override
     def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[MismatchLeaf]]:
         yield MismatchLeaf
 
-    __slots__ = ('_expression_builder',)
+    __slots__ = ('_expression_builder_index',)
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
@@ -505,53 +1034,131 @@ class NegativeLookaheadExpressionBuilder(
         )
 
     @override
-    def __new__(
-        cls,
-        expression_builder: ExpressionBuilder[
-            MatchLeaf | MatchTree, AnyMismatch
-        ],
-        /,
-    ) -> Self:
-        _validate_expression_builder(expression_builder)
+    def __new__(cls, expression_builder_index: int, /) -> Self:
+        _validate_expression_builder_index(expression_builder_index)
         self = super().__new__(cls)
-        self._expression_builder = expression_builder
+        self._expression_builder_index = expression_builder_index
         return self
 
     @override
     def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self._expression_builder!r})'
+        return f'{type(self).__qualname__}({self._expression_builder_index!r})'
 
 
 @final
 class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
+    @property
+    def expression_builder_index(self, /) -> int:
+        return self._expression_builder_index
+
     @override
-    def always_matches(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.always_matches(visited_rule_names)
+    def always_matches(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).always_matches(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
 
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any, Any]]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        rules: Mapping[str, Rule[Any, Any]],
     ) -> OneOrMoreExpression:
-        _check_that_expression_builder_is_progressing(self._expression_builder)
-        return OneOrMoreExpression(self._expression_builder.build(rules=rules))
+        expression_builder = self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        )
+        _check_that_expression_builder_is_progressing(
+            expression_builder,
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        )
+        return OneOrMoreExpression(
+            expression_builder.build(
+                expression_builders=expression_builders,
+                rule_expression_builder_indices=rule_expression_builder_indices,
+                rules=rules,
+            )
+        )
 
     @override
-    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_left_recursive(visited_rule_names)
+    def is_left_recursive(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_left_recursive(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
 
     @override
-    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_nullable(visited_rule_names)
+    def is_nullable(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        return expression_builders[self._expression_builder_index].is_nullable(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
 
     @override
     def is_terminating(
-        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        is_leftmost: bool,
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> bool:
-        return self._expression_builder.is_terminating(
-            visited_rule_names, is_leftmost=is_leftmost
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_terminating(
+            expression_builders=expression_builders,
+            is_leftmost=is_leftmost,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
         )
 
-    __slots__ = ('_expression_builder',)
+    __slots__ = ('_expression_builder_index',)
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
@@ -560,86 +1167,229 @@ class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
         )
 
     @override
-    def __new__(
-        cls,
-        expression_builder: ExpressionBuilder[
-            MatchLeaf | MatchTree, AnyMismatch
-        ],
-        /,
-    ) -> Self:
-        _validate_expression_builder(expression_builder)
+    def __new__(cls, expression_builder_index: int, /) -> Self:
+        _validate_expression_builder_index(expression_builder_index)
         self = super().__new__(cls)
-        self._expression_builder = expression_builder
+        self._expression_builder_index = expression_builder_index
         return self
 
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
+    _expression_builder_index: int
+
+    def _get_expression_builder(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+    ) -> ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]:
+        result = expression_builders[self._expression_builder_index]
+        assert _is_expression_builder(
+            result,
+            expected_match_cls=MatchLeaf | MatchTree,
+            expected_mismatch_cls=AnyMismatch,
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ), result
+        return result
 
     @override
     def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[MatchTree]]:
         yield MatchTree
 
     @override
     def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[MismatchTree]]:
         yield MismatchTree
 
     @override
     def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self._expression_builder!r})'
+        return f'{type(self).__qualname__}({self._expression_builder_index!r})'
 
 
 @final
 class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch, AnyMismatch]):
+    @property
+    def expression_builder_index(self, /) -> int:
+        return self._expression_builder_index
+
     @override
-    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+    def always_matches(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return True
 
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any, Any]]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        rules: Mapping[str, Rule[Any, Any]],
     ) -> OptionalExpression:
-        _check_that_expression_builder_is_progressing(self._expression_builder)
-        return OptionalExpression(self._expression_builder.build(rules=rules))
+        expression_builder = self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        )
+        _check_that_expression_builder_is_progressing(
+            expression_builder,
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        )
+        return OptionalExpression(
+            expression_builder.build(
+                expression_builders=expression_builders,
+                rule_expression_builder_indices=rule_expression_builder_indices,
+                rules=rules,
+            )
+        )
 
     @override
-    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_left_recursive(visited_rule_names)
+    def is_left_recursive(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_left_recursive(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
 
     @override
-    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+    def is_nullable(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return True
 
     @override
     def is_terminating(
-        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        is_leftmost: bool,
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> bool:
-        return not is_leftmost or self._expression_builder.is_terminating(
-            visited_rule_names, is_leftmost=is_leftmost
+        return not is_leftmost or self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_terminating(
+            expression_builders=expression_builders,
+            is_leftmost=is_leftmost,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
         )
 
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
+    _expression_builder_index: int
+
+    def _get_expression_builder(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+    ) -> ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]:
+        result = expression_builders[self._expression_builder_index]
+        assert _is_expression_builder(
+            result,
+            expected_match_cls=MatchLeaf | MatchTree,
+            expected_mismatch_cls=AnyMismatch,
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ), result
+        return result
 
     @override
     def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[AnyMatch]]:
         yield LookaheadMatch
-        yield from self._expression_builder.to_match_classes(
-            visited_rule_names=visited_rule_names
+        yield from self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).to_match_classes(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
         )
 
     @override
     def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[AnyMismatch]]:
-        yield from self._expression_builder.to_mismatch_classes(
-            visited_rule_names=visited_rule_names
+        yield from self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).to_mismatch_classes(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
         )
 
-    __slots__ = ('_expression_builder',)
+    __slots__ = ('_expression_builder_index',)
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
@@ -648,71 +1398,176 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch, AnyMismatch]):
         )
 
     @override
-    def __new__(
-        cls,
-        expression_builder: ExpressionBuilder[
-            MatchLeaf | MatchTree, AnyMismatch
-        ],
-        /,
-    ) -> Self:
-        _validate_expression_builder(expression_builder)
+    def __new__(cls, expression_builder_index: int, /) -> Self:
+        _validate_expression_builder_index(expression_builder_index)
         self = super().__new__(cls)
-        self._expression_builder = expression_builder
+        self._expression_builder_index = expression_builder_index
         return self
 
     @override
     def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self._expression_builder!r})'
+        return f'{type(self).__qualname__}({self._expression_builder_index!r})'
 
 
 @final
 class PositiveLookaheadExpressionBuilder(
     ExpressionBuilder[LookaheadMatch, MismatchLeaf]
 ):
-    @override
-    def always_matches(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.always_matches(visited_rule_names)
+    @property
+    def expression_builder_index(self, /) -> int:
+        return self._expression_builder_index
 
     @override
-    def build(
-        self, /, *, rules: Mapping[str, Rule[Any, Any]]
-    ) -> PositiveLookaheadExpression:
-        _check_that_expression_builder_is_progressing(self._expression_builder)
-        return PositiveLookaheadExpression(
-            self._expression_builder.build(rules=rules)
+    def always_matches(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).always_matches(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
         )
 
     @override
-    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_left_recursive(visited_rule_names)
+    def build(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        rules: Mapping[str, Rule[Any, Any]],
+    ) -> PositiveLookaheadExpression:
+        expression_builder = self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        )
+        _check_that_expression_builder_is_progressing(
+            expression_builder,
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        )
+        return PositiveLookaheadExpression(
+            expression_builder.build(
+                expression_builders=expression_builders,
+                rule_expression_builder_indices=rule_expression_builder_indices,
+                rules=rules,
+            )
+        )
 
     @override
-    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+    def is_left_recursive(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_left_recursive(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
+
+    @override
+    def is_nullable(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return True
 
     @override
     def is_terminating(
-        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        is_leftmost: bool,
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> bool:
-        return self._expression_builder.is_terminating(
-            visited_rule_names, is_leftmost=is_leftmost
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_terminating(
+            expression_builders=expression_builders,
+            is_leftmost=is_leftmost,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
         )
 
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
+    _expression_builder_index: int
+
+    def _get_expression_builder(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+    ) -> ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]:
+        result = expression_builders[self._expression_builder_index]
+        assert _is_expression_builder(
+            result,
+            expected_match_cls=MatchLeaf | MatchTree,
+            expected_mismatch_cls=AnyMismatch,
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ), result
+        return result
 
     @override
     def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[LookaheadMatch]]:
         yield LookaheadMatch
 
     @override
     def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[MismatchLeaf]]:
         yield MismatchLeaf
 
-    __slots__ = ('_expression_builder',)
+    __slots__ = ('_expression_builder_index',)
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
@@ -721,56 +1576,181 @@ class PositiveLookaheadExpressionBuilder(
         )
 
     @override
-    def __new__(
-        cls,
-        expression_builder: ExpressionBuilder[
-            MatchLeaf | MatchTree, AnyMismatch
-        ],
-        /,
-    ) -> Self:
+    def __new__(cls, expression_builder_index: int, /) -> Self:
         self = super().__new__(cls)
-        self._expression_builder = expression_builder
+        self._expression_builder_index = expression_builder_index
         return self
 
     @override
     def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self._expression_builder!r})'
+        return f'{type(self).__qualname__}({self._expression_builder_index!r})'
 
 
 @final
 class PositiveOrMoreExpressionBuilder(
     ExpressionBuilder[MatchTree, MismatchTree]
 ):
+    @property
+    def expression_builder_index(self, /) -> int:
+        return self._expression_builder_index
+
     @override
-    def always_matches(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.always_matches(visited_rule_names)
+    def always_matches(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).always_matches(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
 
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any, Any]]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        rules: Mapping[str, Rule[Any, Any]],
     ) -> PositiveOrMoreExpression:
-        _check_that_expression_builder_is_progressing(self._expression_builder)
+        expression_builder = self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        )
+        _check_that_expression_builder_is_progressing(
+            expression_builder,
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        )
         return PositiveOrMoreExpression(
-            self._expression_builder.build(rules=rules), self._start
+            expression_builder.build(
+                expression_builders=expression_builders,
+                rule_expression_builder_indices=rule_expression_builder_indices,
+                rules=rules,
+            ),
+            self._start,
         )
 
     @override
-    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_left_recursive(visited_rule_names)
+    def is_left_recursive(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_left_recursive(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
 
     @override
-    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_nullable(visited_rule_names)
+    def is_nullable(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        return expression_builders[self._expression_builder_index].is_nullable(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
 
     @override
     def is_terminating(
-        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        is_leftmost: bool,
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> bool:
-        return self._expression_builder.is_terminating(
-            visited_rule_names, is_leftmost=is_leftmost
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_terminating(
+            expression_builders=expression_builders,
+            is_leftmost=is_leftmost,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
         )
 
-    __slots__ = '_expression_builder', '_start'
+    _expression_builder_index: int
+    _start: int
+
+    def _get_expression_builder(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+    ) -> ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]:
+        result = expression_builders[self._expression_builder_index]
+        assert _is_expression_builder(
+            result,
+            expected_match_cls=MatchLeaf | MatchTree,
+            expected_mismatch_cls=AnyMismatch,
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ), result
+        return result
+
+    @override
+    def _to_match_classes_impl(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> Iterable[type[MatchTree]]:
+        yield MatchTree
+
+    @override
+    def _to_mismatch_classes_impl(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> Iterable[type[MismatchTree]]:
+        yield MismatchTree
+
+    __slots__ = '_expression_builder_index', '_start'
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
@@ -779,16 +1759,9 @@ class PositiveOrMoreExpressionBuilder(
         )
 
     @override
-    def __new__(
-        cls,
-        expression_builder: ExpressionBuilder[
-            MatchLeaf | MatchTree, AnyMismatch
-        ],
-        start: int,
-        /,
-    ) -> Self:
+    def __new__(cls, expression_builder_index: int, start: int, /) -> Self:
         _validate_repetition_expression_builder_bound(start)
-        _validate_expression_builder(expression_builder)
+        _validate_expression_builder_index(expression_builder_index)
         if start < PositiveOrMoreExpression.MIN_START:
             raise ValueError(
                 'Repetition start should not be '
@@ -796,63 +1769,184 @@ class PositiveOrMoreExpressionBuilder(
                 f'but got {start!r}.'
             )
         self = super().__new__(cls)
-        self._expression_builder, self._start = expression_builder, start
+        self._expression_builder_index, self._start = (
+            expression_builder_index,
+            start,
+        )
         return self
-
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
-    _start: int
-
-    @override
-    def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[MatchTree]]:
-        yield MatchTree
-
-    @override
-    def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[MismatchTree]]:
-        yield MismatchTree
 
     @override
     def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self._expression_builder!r})'
+        return f'{type(self).__qualname__}({self._expression_builder_index!r})'
 
 
 @final
 class PositiveRepetitionRangeExpressionBuilder(
     ExpressionBuilder[MatchTree, MismatchTree]
 ):
+    @property
+    def expression_builder_index(self, /) -> int:
+        return self._expression_builder_index
+
     @override
-    def always_matches(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.always_matches(visited_rule_names)
+    def always_matches(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).always_matches(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
 
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any, Any]]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        rules: Mapping[str, Rule[Any, Any]],
     ) -> PositiveRepetitionRangeExpression:
-        _check_that_expression_builder_is_progressing(self._expression_builder)
+        expression_builder = self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        )
+        _check_that_expression_builder_is_progressing(
+            expression_builder,
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        )
         return PositiveRepetitionRangeExpression(
-            self._expression_builder.build(rules=rules), self._start, self._end
+            expression_builder.build(
+                expression_builders=expression_builders,
+                rule_expression_builder_indices=rule_expression_builder_indices,
+                rules=rules,
+            ),
+            self._start,
+            self._end,
         )
 
     @override
-    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_left_recursive(visited_rule_names)
+    def is_left_recursive(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_left_recursive(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
 
     @override
-    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_nullable(visited_rule_names)
+    def is_nullable(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        return expression_builders[self._expression_builder_index].is_nullable(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
 
     @override
     def is_terminating(
-        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        is_leftmost: bool,
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> bool:
-        return self._expression_builder.is_terminating(
-            visited_rule_names, is_leftmost=is_leftmost
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_terminating(
+            expression_builders=expression_builders,
+            is_leftmost=is_leftmost,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
         )
 
-    __slots__ = '_end', '_expression_builder', '_start'
+    _end: int
+    _expression_builder_index: int
+    _start: int
+
+    def _get_expression_builder(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+    ) -> ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]:
+        result = expression_builders[self._expression_builder_index]
+        assert _is_expression_builder(
+            result,
+            expected_match_cls=MatchLeaf | MatchTree,
+            expected_mismatch_cls=AnyMismatch,
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ), result
+        return result
+
+    @override
+    def _to_match_classes_impl(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> Iterable[type[MatchTree]]:
+        yield MatchTree
+
+    @override
+    def _to_mismatch_classes_impl(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> Iterable[type[MismatchTree]]:
+        yield MismatchTree
+
+    __slots__ = '_end', '_expression_builder_index', '_start'
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
@@ -862,17 +1956,11 @@ class PositiveRepetitionRangeExpressionBuilder(
 
     @override
     def __new__(
-        cls,
-        expression_builder: ExpressionBuilder[
-            MatchLeaf | MatchTree, AnyMismatch
-        ],
-        start: int,
-        end: int,
-        /,
+        cls, expression_builder_index: int, start: int, end: int, /
     ) -> Self:
         _validate_repetition_expression_builder_bound(start)
         _validate_repetition_expression_builder_bound(end)
-        _validate_expression_builder(expression_builder)
+        _validate_expression_builder_index(expression_builder_index)
         if start < PositiveRepetitionRangeExpression.MIN_START:
             raise ValueError(
                 'Repetition range start should not be '
@@ -885,55 +1973,82 @@ class PositiveRepetitionRangeExpressionBuilder(
                 f'but got {start!r} >= {end!r}.'
             )
         self = super().__new__(cls)
-        self._expression_builder, self._end, self._start = (
-            expression_builder,
+        self._expression_builder_index, self._end, self._start = (
+            expression_builder_index,
             end,
             start,
         )
         return self
 
-    _end: int
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
-    _start: int
-
-    @override
-    def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[MatchTree]]:
-        yield MatchTree
-
-    @override
-    def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[MismatchTree]]:
-        yield MismatchTree
-
     @override
     def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self._expression_builder!r})'
+        return (
+            f'{type(self).__qualname__}'
+            '('
+            f'{self._expression_builder_index!r}, '
+            f'{self._start!r}, '
+            f'{self._end!r}'
+            ')'
+        )
 
 
 @final
 class PrioritizedChoiceExpressionBuilder(
-    ExpressionBuilder[MatchT_co, MismatchTree]
+    ExpressionBuilder[AnyMatch, MismatchTree]
 ):
+    MIN_VARIANT_BUILDERS_COUNT: ClassVar[int] = 2
+
+    @property
+    def variant_builder_indices(self, /) -> Sequence[int]:
+        return self._variant_builder_indices
+
     @override
-    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+    def always_matches(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return any(
-            variant_builder.always_matches(visited_rule_names)
-            for variant_builder in self._variant_builders
+            expression_builders[variant_builder_index].always_matches(
+                expression_builders=expression_builders,
+                rule_expression_builder_indices=rule_expression_builder_indices,
+                visited_rule_names=visited_rule_names,
+            )
+            for variant_builder_index in self._variant_builder_indices
         )
 
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any, Any]]
-    ) -> PrioritizedChoiceExpression[MatchT_co]:
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        rules: Mapping[str, Rule[Any, Any]],
+    ) -> PrioritizedChoiceExpression:
+        variant_builders = [
+            expression_builders[variant_builder_index]
+            for variant_builder_index in self._variant_builder_indices
+        ]
         if (
             len(
                 always_matching_variants := [
                     variant_builder
-                    for variant_builder in self._variant_builders[:-1]
-                    if variant_builder.always_matches(set())
+                    for variant_builder in variant_builders[:-1]
+                    if variant_builder.always_matches(
+                        expression_builders=expression_builders,
+                        rule_expression_builder_indices=(
+                            rule_expression_builder_indices
+                        ),
+                        visited_rule_names=set(),
+                    )
                 ]
             )
             > 0
@@ -945,37 +2060,115 @@ class PrioritizedChoiceExpressionBuilder(
             )
         return PrioritizedChoiceExpression(
             [
-                variant_builder.build(rules=rules)
-                for variant_builder in self._variant_builders
+                variant_builder.build(
+                    expression_builders=expression_builders,
+                    rule_expression_builder_indices=(
+                        rule_expression_builder_indices
+                    ),
+                    rules=rules,
+                )
+                for variant_builder in variant_builders
             ]
         )
 
     @override
-    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
+    def is_left_recursive(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return any(
-            variant_builder.is_left_recursive(visited_rule_names)
-            for variant_builder in self._variant_builders
+            expression_builders[variant_builder_index].is_left_recursive(
+                expression_builders=expression_builders,
+                rule_expression_builder_indices=rule_expression_builder_indices,
+                visited_rule_names=visited_rule_names,
+            )
+            for variant_builder_index in self._variant_builder_indices
         )
 
     @override
-    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+    def is_nullable(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return any(
-            variant_builder.is_nullable(visited_rule_names)
-            for variant_builder in self._variant_builders
+            expression_builders[variant_builder_index].is_nullable(
+                expression_builders=expression_builders,
+                rule_expression_builder_indices=rule_expression_builder_indices,
+                visited_rule_names=visited_rule_names,
+            )
+            for variant_builder_index in self._variant_builder_indices
         )
 
     @override
     def is_terminating(
-        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        is_leftmost: bool,
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> bool:
         return any(
-            variant_builder.is_terminating(
-                visited_rule_names, is_leftmost=is_leftmost
+            expression_builders[variant_builder_index].is_terminating(
+                expression_builders=expression_builders,
+                is_leftmost=is_leftmost,
+                rule_expression_builder_indices=rule_expression_builder_indices,
+                visited_rule_names=visited_rule_names,
             )
-            for variant_builder in self._variant_builders
+            for variant_builder_index in self._variant_builder_indices
         )
 
-    __slots__ = ('_variant_builders',)
+    _variant_builder_indices: Sequence[int]
+
+    @override
+    def _to_match_classes_impl(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> Iterable[type[AnyMatch]]:
+        for variant_builder_index in self._variant_builder_indices:
+            yield from expression_builders[
+                variant_builder_index
+            ].to_match_classes(
+                expression_builders=expression_builders,
+                rule_expression_builder_indices=rule_expression_builder_indices,
+                visited_rule_names=visited_rule_names,
+            )
+
+    @override
+    def _to_mismatch_classes_impl(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> Iterable[type[MismatchTree]]:
+        yield MismatchTree
+
+    __slots__ = ('_variant_builder_indices',)
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
@@ -984,64 +2177,84 @@ class PrioritizedChoiceExpressionBuilder(
         )
 
     @override
-    def __new__(
-        cls,
-        variant_builders: Sequence[ExpressionBuilder[MatchT_co, AnyMismatch]],
-        /,
-    ) -> Self:
-        assert len(variant_builders) > 1, variant_builders
-        flattened_variant_builders: list[
-            ExpressionBuilder[MatchT_co, AnyMismatch]
-        ] = []
-        for variant_builder in variant_builders:
-            if isinstance(variant_builder, PrioritizedChoiceExpressionBuilder):
-                flattened_variant_builders.extend(
-                    variant_builder._variant_builders  # noqa: SLF001
-                )
-            else:
-                flattened_variant_builders.append(variant_builder)
-        self = super().__new__(cls)
-        self._variant_builders = flattened_variant_builders
-        return self
-
-    _variant_builders: Sequence[ExpressionBuilder[MatchT_co, AnyMismatch]]
-
-    @override
-    def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[MatchT_co]]:
-        for variant in self._variant_builders:
-            yield from variant.to_match_classes(
-                visited_rule_names=visited_rule_names
+    def __new__(cls, variant_builder_indices: Sequence[int], /) -> Self:
+        if len(variant_builder_indices) < cls.MIN_VARIANT_BUILDERS_COUNT:
+            raise ValueError(
+                f'{cls.__qualname__!r} should have '
+                f'at least {cls.MIN_VARIANT_BUILDERS_COUNT!r} '
+                'variant builders, '
+                f'but got {len(variant_builder_indices)!r}.'
             )
-
-    @override
-    def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[MismatchTree]]:
-        yield MismatchTree
+        if (
+            len(
+                invalid_type_variant_builder_indices := [
+                    variant_builder_index
+                    for variant_builder_index in variant_builder_indices
+                    if not isinstance(variant_builder_index, int)
+                ]
+            )
+            > 0
+        ):
+            raise TypeError(invalid_type_variant_builder_indices)
+        if (
+            len(
+                invalid_value_variant_builder_indices := [
+                    variant_builder_index
+                    for variant_builder_index in variant_builder_indices
+                    if variant_builder_index not in range(sys.maxsize + 1)
+                ]
+            )
+            > 0
+        ):
+            raise ValueError(invalid_value_variant_builder_indices)
+        self = super().__new__(cls)
+        self._variant_builder_indices = variant_builder_indices
+        return self
 
     @override
     def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self._variant_builders!r})'
+        return f'{type(self).__qualname__}({self._variant_builder_indices!r})'
 
 
 @final
-class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
+class RuleReferenceBuilder(ExpressionBuilder[AnyMatch, AnyMismatch]):
     @override
-    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+    def always_matches(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         if self._name in visited_rule_names:
             return True
         visited_rule_names.add(self._name)
-        result = self._resolve().always_matches(visited_rule_names)
+        result = self._resolve(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).always_matches(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
         visited_rule_names.remove(self._name)
         return result
 
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any, Any]]
-    ) -> RuleReference[MatchT_co, MismatchT_co]:
-        cursor: RuleReferenceBuilder[Any, Any] = self
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        rules: Mapping[str, Rule[Any, Any]],
+    ) -> RuleReference:
+        cursor = self
         visited_rule_names: list[str] = []
         while True:
             cursor_name: str = cursor._name
@@ -1055,7 +2268,9 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
                 raise ValueError(f'Cycle detected: {cycle_names!r}.')
             visited_rule_names.append(cursor_name)
             try:
-                candidate = self._expression_builders[cursor._name]
+                candidate = expression_builders[
+                    rule_expression_builder_indices[cursor._name]
+                ]
             except KeyError:
                 raise ValueError(
                     f'Name {cursor_name!r} is not found in rules.'
@@ -1065,47 +2280,166 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
                     self._name,
                     cursor_name,
                     match_classes=list(
-                        candidate.to_match_classes(visited_rule_names=set())
+                        candidate.to_match_classes(
+                            expression_builders=expression_builders,
+                            rule_expression_builder_indices=(
+                                rule_expression_builder_indices
+                            ),
+                            visited_rule_names=set(),
+                        )
                     ),
                     mismatch_classes=list(
-                        candidate.to_mismatch_classes(visited_rule_names=set())
+                        candidate.to_mismatch_classes(
+                            expression_builders=expression_builders,
+                            rule_expression_builder_indices=(
+                                rule_expression_builder_indices
+                            ),
+                            visited_rule_names=set(),
+                        )
                     ),
                     rules=rules,
                 )
             cursor = candidate
 
     @override
-    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
+    def is_left_recursive(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         if self._name in visited_rule_names:
             return True
         visited_rule_names.add(self._name)
-        result = self._resolve().is_left_recursive(visited_rule_names)
+        result = self._resolve(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_left_recursive(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
         visited_rule_names.remove(self._name)
         return result
 
     @override
-    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+    def is_nullable(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         if self._name in visited_rule_names:
             return False
         visited_rule_names.add(self._name)
-        result = self._resolve().is_nullable(visited_rule_names)
+        result = self._resolve(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_nullable(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
         visited_rule_names.remove(self._name)
         return result
 
     @override
     def is_terminating(
-        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        is_leftmost: bool,
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> bool:
         if self._name in visited_rule_names:
             return False
         visited_rule_names.add(self._name)
-        result = self._resolve().is_terminating(
-            visited_rule_names, is_leftmost=is_leftmost
+        result = self._resolve(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_terminating(
+            expression_builders=expression_builders,
+            is_leftmost=is_leftmost,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
         )
         visited_rule_names.remove(self._name)
         return result
 
-    __slots__ = '_expression_builders', '_name'
+    _name: str
+
+    def _resolve(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+    ) -> ExpressionBuilder[AnyMatch, AnyMismatch]:
+        return expression_builders[rule_expression_builder_indices[self._name]]
+
+    @override
+    def _to_match_classes_impl(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> Iterable[type[AnyMatch]]:
+        if self._name in visited_rule_names:
+            return
+        visited_rule_names.add(self._name)
+        yield from self._resolve(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).to_match_classes(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
+        visited_rule_names.remove(self._name)
+
+    @override
+    def _to_mismatch_classes_impl(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> Iterable[type[AnyMismatch]]:
+        if self._name in visited_rule_names:
+            return
+        visited_rule_names.add(self._name)
+        yield from self._resolve(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).to_mismatch_classes(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
+        visited_rule_names.remove(self._name)
+
+    __slots__ = ('_name',)
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
@@ -1114,49 +2448,11 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
         )
 
     @override
-    def __new__(
-        cls,
-        name: str,
-        /,
-        *,
-        expression_builders: Mapping[str, ExpressionBuilder[Any, Any]],
-    ) -> Self:
+    def __new__(cls, name: str, /) -> Self:
         assert len(name) > 0, name
         self = super().__new__(cls)
-        self._expression_builders, self._name = expression_builders, name
+        self._name = name
         return self
-
-    _expression_builders: Mapping[
-        str, ExpressionBuilder[MatchT_co, MismatchT_co]
-    ]
-    _name: str
-
-    def _resolve(self, /) -> ExpressionBuilder[MatchT_co, MismatchT_co]:
-        return self._expression_builders[self._name]
-
-    @override
-    def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[MatchT_co]]:
-        if self._name in visited_rule_names:
-            return
-        visited_rule_names.add(self._name)
-        yield from self._resolve().to_match_classes(
-            visited_rule_names=visited_rule_names
-        )
-        visited_rule_names.remove(self._name)
-
-    @override
-    def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[MismatchT_co]]:
-        if self._name in visited_rule_names:
-            return
-        visited_rule_names.add(self._name)
-        yield from self._resolve().to_mismatch_classes(
-            visited_rule_names=visited_rule_names
-        )
-        visited_rule_names.remove(self._name)
 
     @override
     def __repr__(self, /) -> str:
@@ -1165,34 +2461,81 @@ class RuleReferenceBuilder(ExpressionBuilder[MatchT_co, MismatchT_co]):
 
 @final
 class SequenceExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
-    MIN_PROGRESSING_ELEMENT_BUILDERS_COUNT: ClassVar[int] = 1
+    MIN_ELEMENT_BUILDERS_COUNT: ClassVar[int] = 2
+
+    @property
+    def element_builder_indices(self, /) -> Sequence[int]:
+        return self._element_builder_indices
 
     @override
-    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+    def always_matches(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return False
 
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any, Any]]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        rules: Mapping[str, Rule[Any, Any]],
     ) -> SequenceExpression:
+        element_builders = [
+            expression_builders[element_builder_index]
+            for element_builder_index in self._element_builder_indices
+        ]
         if all(
-            element_builder.is_nullable(set())
-            for element_builder in self._element_builders
+            element_builder.is_nullable(
+                expression_builders=expression_builders,
+                rule_expression_builder_indices=(
+                    rule_expression_builder_indices
+                ),
+                visited_rule_names=set(),
+            )
+            for element_builder in element_builders
         ):
             raise ValueError(
-                'At least one sequence element should be non-nullable, '
-                f'but got: {", ".join(map(repr, self._element_builders))}.'
+                f'{type(self).__qualname__!r} should have '
+                'at least one non-nullable element builder, '
+                f'but got: {", ".join(map(repr, element_builders))}.'
             )
         return SequenceExpression(
             [
-                element_builder.build(rules=rules)
-                for element_builder in self._element_builders
+                element_builder.build(
+                    expression_builders=expression_builders,
+                    rule_expression_builder_indices=(
+                        rule_expression_builder_indices
+                    ),
+                    rules=rules,
+                )
+                for element_builder in element_builders
             ]
         )
 
     @override
-    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
-        for element_builder in self._element_builders:
+    def is_left_recursive(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        for element_builder_index in self._element_builder_indices:
+            element_builder = expression_builders[element_builder_index]
             if isinstance(
                 element_builder,
                 (
@@ -1200,30 +2543,91 @@ class SequenceExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
                     | PositiveLookaheadExpressionBuilder
                 ),
             ):
-                if element_builder.is_left_recursive(visited_rule_names):
+                if element_builder.is_left_recursive(
+                    expression_builders=expression_builders,
+                    rule_expression_builder_indices=rule_expression_builder_indices,
+                    visited_rule_names=visited_rule_names,
+                ):
                     return True
                 continue
-            return element_builder.is_left_recursive(visited_rule_names)
+            return element_builder.is_left_recursive(
+                expression_builders=expression_builders,
+                rule_expression_builder_indices=rule_expression_builder_indices,
+                visited_rule_names=visited_rule_names,
+            )
         raise ValueError('Sequence consists of non-left recursive lookaheads.')
 
     @override
-    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+    def is_nullable(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return False
 
     @override
     def is_terminating(
-        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        is_leftmost: bool,
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> bool:
-        return self._element_builders[0].is_terminating(
-            visited_rule_names, is_leftmost=is_leftmost
+        return expression_builders[
+            self._element_builder_indices[0]
+        ].is_terminating(
+            expression_builders=expression_builders,
+            is_leftmost=is_leftmost,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
         ) and all(
-            element_builder.is_terminating(
-                visited_rule_names, is_leftmost=False
+            expression_builders[element_builder_index].is_terminating(
+                expression_builders=expression_builders,
+                is_leftmost=False,
+                rule_expression_builder_indices=rule_expression_builder_indices,
+                visited_rule_names=visited_rule_names,
             )
-            for element_builder in self._element_builders[1:]
+            for element_builder_index in self._element_builder_indices[1:]
         )
 
-    __slots__ = ('_element_builders',)
+    _element_builder_indices: Sequence[int]
+
+    @override
+    def _to_match_classes_impl(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> Iterable[type[MatchTree]]:
+        yield MatchTree
+
+    @override
+    def _to_mismatch_classes_impl(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> Iterable[type[MismatchTree]]:
+        yield MismatchTree
+
+    __slots__ = ('_element_builder_indices',)
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
@@ -1232,69 +2636,205 @@ class SequenceExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
         )
 
     @override
-    def __new__(
-        cls,
-        element_builders: Sequence[ExpressionBuilder[AnyMatch, AnyMismatch]],
-        /,
-    ) -> Self:
-        assert len(element_builders) > 1, element_builders
+    def __new__(cls, element_builder_indices: Sequence[int], /) -> Self:
+        if len(element_builder_indices) < cls.MIN_ELEMENT_BUILDERS_COUNT:
+            raise ValueError(
+                f'{cls.__qualname__!r} should have '
+                f'at least {cls.MIN_ELEMENT_BUILDERS_COUNT!r} '
+                'element builders, '
+                f'but got {len(element_builder_indices)!r}.'
+            )
+        if (
+            len(
+                invalid_type_element_builder_indices := [
+                    element_builder_index
+                    for element_builder_index in element_builder_indices
+                    if not isinstance(element_builder_index, int)
+                ]
+            )
+            > 0
+        ):
+            raise TypeError(invalid_type_element_builder_indices)
+        if (
+            len(
+                invalid_value_element_builder_indices := [
+                    element_builder_index
+                    for element_builder_index in element_builder_indices
+                    if element_builder_index not in range(sys.maxsize + 1)
+                ]
+            )
+            > 0
+        ):
+            raise ValueError(invalid_value_element_builder_indices)
         self = super().__new__(cls)
-        self._element_builders = element_builders
+        self._element_builder_indices = element_builder_indices
         return self
-
-    _element_builders: Sequence[ExpressionBuilder[AnyMatch, AnyMismatch]]
-
-    @override
-    def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[MatchTree]]:
-        yield MatchTree
-
-    @override
-    def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[MismatchTree]]:
-        yield MismatchTree
 
     @override
     def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self._element_builders!r})'
+        return f'{type(self).__qualname__}({self._element_builder_indices!r})'
 
 
 @final
 class ZeroOrMoreExpressionBuilder(
     ExpressionBuilder[LookaheadMatch | MatchTree, AnyMismatch]
 ):
+    @property
+    def expression_builder_index(self, /) -> int:
+        return self._expression_builder_index
+
     @override
-    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+    def always_matches(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return True
 
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any, Any]]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        rules: Mapping[str, Rule[Any, Any]],
     ) -> ZeroOrMoreExpression:
-        _check_that_expression_builder_is_progressing(self._expression_builder)
+        expression_builder = self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        )
+        _check_that_expression_builder_is_progressing(
+            expression_builder,
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        )
         return ZeroOrMoreExpression(
-            self._expression_builder.build(rules=rules)
+            expression_builder.build(
+                expression_builders=expression_builders,
+                rule_expression_builder_indices=rule_expression_builder_indices,
+                rules=rules,
+            )
         )
 
     @override
-    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_left_recursive(visited_rule_names)
+    def is_left_recursive(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_left_recursive(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
 
     @override
-    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+    def is_nullable(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return True
 
     @override
     def is_terminating(
-        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        is_leftmost: bool,
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> bool:
-        return not is_leftmost or self._expression_builder.is_terminating(
-            visited_rule_names, is_leftmost=is_leftmost
+        return not is_leftmost or self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_terminating(
+            expression_builders=expression_builders,
+            is_leftmost=is_leftmost,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
         )
 
-    __slots__ = ('_expression_builder',)
+    _expression_builder_index: int
+
+    def _get_expression_builder(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+    ) -> ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]:
+        result = expression_builders[self._expression_builder_index]
+        assert _is_expression_builder(
+            result,
+            expected_match_cls=MatchLeaf | MatchTree,
+            expected_mismatch_cls=AnyMismatch,
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ), result
+        return result
+
+    @override
+    def _to_match_classes_impl(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> Iterable[type[LookaheadMatch | MatchTree]]:
+        yield LookaheadMatch
+        yield MatchTree
+
+    @override
+    def _to_mismatch_classes_impl(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> Iterable[type[AnyMismatch]]:
+        yield from self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).to_mismatch_classes(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
+
+    __slots__ = ('_expression_builder_index',)
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
@@ -1303,71 +2843,114 @@ class ZeroOrMoreExpressionBuilder(
         )
 
     @override
-    def __new__(
-        cls,
-        expression_builder: ExpressionBuilder[
-            MatchLeaf | MatchTree, AnyMismatch
-        ],
-        /,
-    ) -> Self:
-        _validate_expression_builder(expression_builder)
+    def __new__(cls, expression_builder_index: int, /) -> Self:
+        _validate_expression_builder_index(expression_builder_index)
         self = super().__new__(cls)
-        self._expression_builder = expression_builder
+        self._expression_builder_index = expression_builder_index
         return self
-
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
-
-    @override
-    def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[LookaheadMatch | MatchTree]]:
-        yield LookaheadMatch
-        yield MatchTree
-
-    @override
-    def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
-    ) -> Iterable[type[AnyMismatch]]:
-        yield from self._expression_builder.to_mismatch_classes(
-            visited_rule_names=visited_rule_names
-        )
 
     @override
     def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self._expression_builder!r})'
+        return f'{type(self).__qualname__}({self._expression_builder_index!r})'
 
 
 class ZeroRepetitionRangeExpressionBuilder(
     ExpressionBuilder[LookaheadMatch | MatchTree, AnyMismatch]
 ):
+    @property
+    def expression_builder_index(self, /) -> int:
+        return self._expression_builder_index
+
     @override
-    def always_matches(self, visited_rule_names: set[str], /) -> bool:
+    def always_matches(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return True
 
     @override
     def build(
-        self, /, *, rules: Mapping[str, Rule[Any, Any]]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        rules: Mapping[str, Rule[Any, Any]],
     ) -> ZeroRepetitionRangeExpression:
-        _check_that_expression_builder_is_progressing(self._expression_builder)
+        expression_builder = self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        )
+        _check_that_expression_builder_is_progressing(
+            expression_builder,
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        )
         return ZeroRepetitionRangeExpression(
-            self._expression_builder.build(rules=rules), self._end
+            expression_builder.build(
+                expression_builders=expression_builders,
+                rule_expression_builder_indices=rule_expression_builder_indices,
+                rules=rules,
+            ),
+            self._end,
         )
 
     @override
-    def is_left_recursive(self, visited_rule_names: set[str], /) -> bool:
-        return self._expression_builder.is_left_recursive(visited_rule_names)
+    def is_left_recursive(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
+        return self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).is_left_recursive(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
+        )
 
     @override
-    def is_nullable(self, visited_rule_names: set[str], /) -> bool:
+    def is_nullable(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
+    ) -> bool:
         return True
 
     @override
     def is_terminating(
-        self, visited_rule_names: set[str], /, *, is_leftmost: bool
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        is_leftmost: bool,
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> bool:
         return True
 
-    __slots__ = '_end', '_expression_builder'
+    __slots__ = '_end', '_expression_builder_index'
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
@@ -1376,16 +2959,9 @@ class ZeroRepetitionRangeExpressionBuilder(
         )
 
     @override
-    def __new__(
-        cls,
-        expression_builder: ExpressionBuilder[
-            MatchLeaf | MatchTree, AnyMismatch
-        ],
-        end: int,
-        /,
-    ) -> Self:
+    def __new__(cls, expression_builder_index: int, end: int, /) -> Self:
         _validate_repetition_expression_builder_bound(end)
-        _validate_expression_builder(expression_builder)
+        _validate_expression_builder_index(expression_builder_index)
         if end < ZeroRepetitionRangeExpression.MIN_END:
             raise ValueError(
                 'Repetition range end should not be '
@@ -1393,44 +2969,126 @@ class ZeroRepetitionRangeExpressionBuilder(
                 f'but got {end!r}.'
             )
         self = super().__new__(cls)
-        self._end, self._expression_builder = end, expression_builder
+        self._end, self._expression_builder_index = (
+            end,
+            expression_builder_index,
+        )
         return self
 
     _end: int
-    _expression_builder: ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]
+    _expression_builder_index: int
+
+    def _get_expression_builder(
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+    ) -> ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]:
+        result = expression_builders[self._expression_builder_index]
+        assert _is_expression_builder(
+            result,
+            expected_match_cls=MatchLeaf | MatchTree,
+            expected_mismatch_cls=AnyMismatch,
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ), result
+        return result
 
     @override
     def _to_match_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[LookaheadMatch | MatchTree]]:
         yield LookaheadMatch
         yield MatchTree
 
     @override
     def _to_mismatch_classes_impl(
-        self, /, *, visited_rule_names: set[str]
+        self,
+        /,
+        *,
+        expression_builders: Sequence[
+            ExpressionBuilder[AnyMatch, AnyMismatch]
+        ],
+        rule_expression_builder_indices: Mapping[str, int],
+        visited_rule_names: set[str],
     ) -> Iterable[type[AnyMismatch]]:
-        yield from self._expression_builder.to_mismatch_classes(
-            visited_rule_names=visited_rule_names
+        yield from self._get_expression_builder(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+        ).to_mismatch_classes(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=visited_rule_names,
         )
 
     @override
     def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self._expression_builder!r})'
+        return (
+            f'{type(self).__qualname__}'
+            '('
+            f'{self._expression_builder_index!r}, {self._end!r}'
+            ')'
+        )
 
 
 def _check_that_expression_builder_is_progressing(
-    value: ExpressionBuilder[Any, Any], /
+    value: ExpressionBuilder[Any, Any],
+    /,
+    *,
+    expression_builders: Sequence[ExpressionBuilder[AnyMatch, AnyMismatch]],
+    rule_expression_builder_indices: Mapping[str, int],
 ) -> None:
-    if value.is_nullable(set()):
+    if value.is_nullable(
+        expression_builders=expression_builders,
+        rule_expression_builder_indices=rule_expression_builder_indices,
+        visited_rule_names=set(),
+    ):
         raise ValueError(
             f'Expected progressing expression builder, but got {value!r}.'
         )
 
 
-def _validate_expression_builder(value: Any, /) -> None:
-    if not isinstance(value, ExpressionBuilder):
+def _is_expression_builder(
+    value: ExpressionBuilder[AnyMatch, AnyMismatch],
+    /,
+    *,
+    expected_match_cls: type[MatchT_co] | UnionType,
+    expected_mismatch_cls: type[MismatchT_co] | UnionType,
+    expression_builders: Sequence[ExpressionBuilder[AnyMatch, AnyMismatch]],
+    rule_expression_builder_indices: Mapping[str, int],
+) -> TypeGuard[ExpressionBuilder[MatchT_co, MismatchT_co]]:
+    return all(
+        issubclass(match_cls, expected_match_cls)
+        for match_cls in value.to_match_classes(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=set(),
+        )
+    ) and all(
+        issubclass(mismatch_cls, expected_mismatch_cls)
+        for mismatch_cls in value.to_mismatch_classes(
+            expression_builders=expression_builders,
+            rule_expression_builder_indices=rule_expression_builder_indices,
+            visited_rule_names=set(),
+        )
+    )
+
+
+def _validate_expression_builder_index(value: Any, /) -> None:
+    if not isinstance(value, int):
         raise TypeError(type(value))
+    if value not in range(sys.maxsize + 1):
+        raise ValueError(value)
 
 
 def _validate_repetition_expression_builder_bound(value: Any, /) -> None:

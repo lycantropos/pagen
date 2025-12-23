@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from collections.abc import Sequence
 from typing import ClassVar, TypeAlias, TypeVar, final
 
@@ -48,8 +49,10 @@ class MismatchLeaf:
         stop_index: int,
     ) -> Self:
         _validate_origin_name(origin_name)
-        if not isinstance(start_index, int):
-            raise TypeError(type(start_index))
+        _validate_index(start_index)
+        _validate_index(stop_index)
+        if start_index >= stop_index:
+            raise ValueError((start_index, stop_index))
         self = super().__new__(cls)
         (
             self._expected_message,
@@ -148,6 +151,13 @@ AnyMismatch: TypeAlias = MismatchLeaf | MismatchTree
 MismatchT_co = TypeVar(
     'MismatchT_co', MismatchLeaf, MismatchTree, AnyMismatch, covariant=True
 )
+
+
+def _validate_index(index: int) -> None:
+    if not isinstance(index, int):
+        raise TypeError(type(index))
+    if index not in range(sys.maxsize + 1):
+        raise ValueError(index)
 
 
 def _validate_origin_name(value: str, /) -> None:

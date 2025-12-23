@@ -1,4 +1,4 @@
-from typing import Any, get_args
+from typing import get_args
 
 from . import _pagen as _module
 
@@ -38,8 +38,8 @@ Expression = (
     | PositiveLookaheadExpression
     | PositiveOrMoreExpression
     | PositiveRepetitionRangeExpression
-    | PrioritizedChoiceExpression[Any]
-    | RuleReference[Any, Any]
+    | PrioritizedChoiceExpression
+    | RuleReference
     | SequenceExpression
     | SingleQuotedLiteralExpression
     | ZeroOrMoreExpression
@@ -56,66 +56,6 @@ assert (
     )
     == 0
 ), missing_expression_classes
-
-# expression builders
-AnyCharacterExpressionBuilder = _module.AnyCharacterExpressionBuilder
-DoubleQuotedLiteralExpressionBuilder = (
-    _module.DoubleQuotedLiteralExpressionBuilder
-)
-CharacterClassExpressionBuilder = _module.CharacterClassExpressionBuilder
-ComplementedCharacterClassExpressionBuilder = (
-    _module.ComplementedCharacterClassExpressionBuilder
-)
-ExactRepetitionExpressionBuilder = _module.ExactRepetitionExpressionBuilder
-PositiveOrMoreExpressionBuilder = _module.PositiveOrMoreExpressionBuilder
-PositiveRepetitionRangeExpressionBuilder = (
-    _module.PositiveRepetitionRangeExpressionBuilder
-)
-ZeroRepetitionRangeExpressionBuilder = (
-    _module.ZeroRepetitionRangeExpressionBuilder
-)
-SingleQuotedLiteralExpressionBuilder = (
-    _module.SingleQuotedLiteralExpressionBuilder
-)
-NegativeLookaheadExpressionBuilder = _module.NegativeLookaheadExpressionBuilder
-OneOrMoreExpressionBuilder = _module.OneOrMoreExpressionBuilder
-OptionalExpressionBuilder = _module.OptionalExpressionBuilder
-PositiveLookaheadExpressionBuilder = _module.PositiveLookaheadExpressionBuilder
-PrioritizedChoiceExpressionBuilder = _module.PrioritizedChoiceExpressionBuilder
-RuleReferenceBuilder = _module.RuleReferenceBuilder
-SequenceExpressionBuilder = _module.SequenceExpressionBuilder
-ZeroOrMoreExpressionBuilder = _module.ZeroOrMoreExpressionBuilder
-
-ExpressionBuilder = (
-    AnyCharacterExpressionBuilder
-    | DoubleQuotedLiteralExpressionBuilder
-    | CharacterClassExpressionBuilder
-    | ComplementedCharacterClassExpressionBuilder
-    | ExactRepetitionExpressionBuilder
-    | PositiveOrMoreExpressionBuilder
-    | PositiveRepetitionRangeExpressionBuilder
-    | ZeroRepetitionRangeExpressionBuilder
-    | SingleQuotedLiteralExpressionBuilder
-    | NegativeLookaheadExpressionBuilder
-    | OneOrMoreExpressionBuilder
-    | OptionalExpressionBuilder
-    | PositiveLookaheadExpressionBuilder
-    | PrioritizedChoiceExpressionBuilder[Any]
-    | RuleReferenceBuilder[Any, Any]
-    | SequenceExpressionBuilder
-    | ZeroOrMoreExpressionBuilder
-)
-
-assert (
-    len(
-        missing_expression_builder_classes := [
-            cls
-            for cls in get_args(ExpressionBuilder)
-            if cls is not globals().get(cls.__name__)
-        ]
-    )
-    == 0
-), missing_expression_builder_classes
 
 # grammar
 Grammar = _module.Grammar

@@ -27,7 +27,7 @@ repos:
     hooks:
       - id: actionlint
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.46.0
+    rev: v0.47.0
     hooks:
       - id: markdownlint-fix
   - repo: local
@@ -62,7 +62,7 @@ repos:
         pass_filenames: false
         types: [ rust ]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.6
+    rev: v0.14.10
     hooks:
       - id: ruff-format
       - id: ruff-check
@@ -70,7 +70,7 @@ repos:
           - --fix
           - --exit-non-zero-on-fix
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.18.2
+    rev: v1.19.1
     hooks:
       - id: mypy
         args:
