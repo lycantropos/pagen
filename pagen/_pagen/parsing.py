@@ -38,6 +38,7 @@ from .expressions import (
 from .grammar import Grammar
 from .grammar_builder import GrammarBuilder
 from .match import AnyMatch, MatchLeaf, MatchTree
+from .mismatch import AnyMismatch
 from .rule import Rule
 from .utils import to_package_non_abstract_subclasses
 
@@ -103,685 +104,663 @@ class RuleName(str, Enum):
         return self._value_
 
 
-PARSER_GRAMMAR_BUILDER: Final[GrammarBuilder] = GrammarBuilder()
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.GRAMMAR,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-            PARSER_GRAMMAR_BUILDER.one_or_more_expression(
-                PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.RULE)
-            ),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.END_OF_FILE),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.RULE,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.IDENTIFIER),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.LEFT_ARROW),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.EXPRESSION),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.EXPRESSION,
-    PARSER_GRAMMAR_BUILDER.prioritized_choice_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.PRIORITIZED_CHOICE),
-            PARSER_GRAMMAR_BUILDER.rule_reference(
-                RuleName.PRIORITIZED_CHOICE_VARIANT
-            ),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.PRIORITIZED_CHOICE,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.rule_reference(
-                RuleName.PRIORITIZED_CHOICE_VARIANT
-            ),
-            PARSER_GRAMMAR_BUILDER.one_or_more_expression(
-                PARSER_GRAMMAR_BUILDER.sequence_expression(
-                    [
-                        PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(
-                            '/'
-                        ),
-                        PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-                        PARSER_GRAMMAR_BUILDER.rule_reference(
-                            RuleName.PRIORITIZED_CHOICE_VARIANT
-                        ),
-                    ]
-                )
-            ),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.PRIORITIZED_CHOICE_VARIANT,
-    PARSER_GRAMMAR_BUILDER.prioritized_choice_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.SEQUENCE),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.SEQUENCE_ELEMENT),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.SEQUENCE,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.SEQUENCE_ELEMENT),
-            PARSER_GRAMMAR_BUILDER.one_or_more_expression(
-                PARSER_GRAMMAR_BUILDER.rule_reference(
-                    RuleName.SEQUENCE_ELEMENT
-                )
-            ),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.SEQUENCE_ELEMENT,
-    PARSER_GRAMMAR_BUILDER.prioritized_choice_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.rule_reference(
-                RuleName.NULLABLE_SEQUENCE_ELEMENT
-            ),
-            PARSER_GRAMMAR_BUILDER.rule_reference(
-                RuleName.NON_NULLABLE_SEQUENCE_ELEMENT
-            ),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.NON_NULLABLE_SEQUENCE_ELEMENT,
-    PARSER_GRAMMAR_BUILDER.prioritized_choice_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.EXACT_REPETITION),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.ONE_OR_MORE),
-            PARSER_GRAMMAR_BUILDER.rule_reference(
-                RuleName.POSITIVE_OR_MORE_EXPRESSION
-            ),
-            PARSER_GRAMMAR_BUILDER.rule_reference(
-                RuleName.POSITIVE_REPETITION_RANGE
-            ),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.NON_NULLABLE_TERM),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.NULLABLE_SEQUENCE_ELEMENT,
-    PARSER_GRAMMAR_BUILDER.prioritized_choice_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.sequence_expression(
-                [
-                    PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(
-                        '('
-                    ),
-                    PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-                    PARSER_GRAMMAR_BUILDER.rule_reference(
-                        RuleName.NULLABLE_SEQUENCE_ELEMENT
-                    ),
-                    PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(
-                        ')'
-                    ),
-                    PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-                ]
-            ),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.NEGATIVE_LOOKAHEAD),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.POSITIVE_LOOKAHEAD),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.OPTIONAL),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.ZERO_OR_MORE),
-            PARSER_GRAMMAR_BUILDER.rule_reference(
-                RuleName.ZERO_REPETITION_RANGE
-            ),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.NEGATIVE_LOOKAHEAD,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('!'),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-            PARSER_GRAMMAR_BUILDER.rule_reference(
-                RuleName.NON_NULLABLE_SEQUENCE_ELEMENT
-            ),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.POSITIVE_LOOKAHEAD,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('&'),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-            PARSER_GRAMMAR_BUILDER.rule_reference(
-                RuleName.NON_NULLABLE_SEQUENCE_ELEMENT
-            ),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.EXACT_REPETITION,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.NON_NULLABLE_TERM),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('{'),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.UNSIGNED_INTEGER),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('}'),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.OPTIONAL,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.NON_NULLABLE_TERM),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('?'),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.ONE_OR_MORE,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.NON_NULLABLE_TERM),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('+'),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.POSITIVE_OR_MORE_EXPRESSION,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.NON_NULLABLE_TERM),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('{'),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.UNSIGNED_INTEGER),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(','),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('}'),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.POSITIVE_REPETITION_RANGE,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.NON_NULLABLE_TERM),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('{'),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.UNSIGNED_INTEGER),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(','),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.UNSIGNED_INTEGER),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('}'),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.ZERO_OR_MORE,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.NON_NULLABLE_TERM),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('*'),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.ZERO_REPETITION_RANGE,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.NON_NULLABLE_TERM),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('{'),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(','),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.UNSIGNED_INTEGER),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('}'),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.NON_NULLABLE_TERM,
-    PARSER_GRAMMAR_BUILDER.prioritized_choice_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.sequence_expression(
-                [
-                    PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(
-                        '('
-                    ),
-                    PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-                    PARSER_GRAMMAR_BUILDER.prioritized_choice_expression(
-                        [
-                            PARSER_GRAMMAR_BUILDER.rule_reference(
-                                RuleName.PRIORITIZED_CHOICE
-                            ),
-                            PARSER_GRAMMAR_BUILDER.rule_reference(
-                                RuleName.SEQUENCE
-                            ),
-                            PARSER_GRAMMAR_BUILDER.rule_reference(
-                                RuleName.NON_NULLABLE_SEQUENCE_ELEMENT
-                            ),
-                        ]
-                    ),
-                    PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(
-                        ')'
-                    ),
-                    PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-                ]
-            ),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.ANY_CHARACTER),
-            PARSER_GRAMMAR_BUILDER.rule_reference(
-                RuleName.COMPLEMENTED_CHARACTER_CLASS
-            ),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.CHARACTER_CLASS),
-            PARSER_GRAMMAR_BUILDER.rule_reference(
-                RuleName.DOUBLE_QUOTED_LITERAL
-            ),
-            PARSER_GRAMMAR_BUILDER.rule_reference(
-                RuleName.SINGLE_QUOTED_LITERAL
-            ),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.RULE_REFERENCE),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.RULE_REFERENCE,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.IDENTIFIER),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-            PARSER_GRAMMAR_BUILDER.negative_lookahead_expression(
-                PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.LEFT_ARROW)
-            ),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.ANY_CHARACTER,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('.'),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.DOUBLE_QUOTED_LITERAL_CHARACTER,
-    PARSER_GRAMMAR_BUILDER.prioritized_choice_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.sequence_expression(
-                [
-                    PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(
-                        '\\'
-                    ),
-                    PARSER_GRAMMAR_BUILDER.character_class_expression(
-                        [
-                            CharacterSet(
-                                DOUBLE_QUOTED_LITERAL_SPECIAL_CHARACTERS
-                                + COMMON_SPECIAL_CHARACTERS
-                            )
-                        ]
-                    ),
-                ]
-            ),
-            PARSER_GRAMMAR_BUILDER.sequence_expression(
-                [
-                    PARSER_GRAMMAR_BUILDER.negative_lookahead_expression(
-                        PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(
-                            '\\'
-                        )
-                    ),
-                    PARSER_GRAMMAR_BUILDER.any_character_expression(),
-                ]
-            ),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.SINGLE_QUOTED_LITERAL_CHARACTER,
-    PARSER_GRAMMAR_BUILDER.prioritized_choice_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.sequence_expression(
-                [
-                    PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(
-                        '\\'
-                    ),
-                    PARSER_GRAMMAR_BUILDER.character_class_expression(
-                        [
-                            CharacterSet(
-                                SINGLE_QUOTED_LITERAL_SPECIAL_CHARACTERS
-                                + COMMON_SPECIAL_CHARACTERS
-                            )
-                        ]
-                    ),
-                ]
-            ),
-            PARSER_GRAMMAR_BUILDER.sequence_expression(
-                [
-                    PARSER_GRAMMAR_BUILDER.negative_lookahead_expression(
-                        PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(
-                            '\\'
-                        )
-                    ),
-                    PARSER_GRAMMAR_BUILDER.any_character_expression(),
-                ]
-            ),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.CHARACTER_CLASS,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('['),
-            PARSER_GRAMMAR_BUILDER.one_or_more_expression(
-                PARSER_GRAMMAR_BUILDER.rule_reference(
-                    RuleName.CHARACTER_CONTAINER
-                )
-            ),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(']'),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.COMPLEMENTED_CHARACTER_CLASS,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('[^'),
-            PARSER_GRAMMAR_BUILDER.one_or_more_expression(
-                PARSER_GRAMMAR_BUILDER.rule_reference(
-                    RuleName.CHARACTER_CONTAINER
-                )
-            ),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(']'),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.CHARACTER_CONTAINER,
-    PARSER_GRAMMAR_BUILDER.prioritized_choice_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.CHARACTER_RANGE),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.CHARACTER_SET),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.CHARACTER_RANGE,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.negative_lookahead_expression(
-                PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(']')
-            ),
-            PARSER_GRAMMAR_BUILDER.rule_reference(
-                RuleName.CHARACTER_CONTAINER_ELEMENT
-            ),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('-'),
-            PARSER_GRAMMAR_BUILDER.rule_reference(
-                RuleName.CHARACTER_CONTAINER_ELEMENT
-            ),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.CHARACTER_SET,
-    PARSER_GRAMMAR_BUILDER.one_or_more_expression(
-        PARSER_GRAMMAR_BUILDER.sequence_expression(
+def _build_parser_grammar() -> Grammar[AnyMatch, AnyMismatch]:
+    grammar_builder = GrammarBuilder()
+    grammar_builder.add_rule(
+        RuleName.GRAMMAR,
+        grammar_builder.sequence_expression(
             [
-                PARSER_GRAMMAR_BUILDER.negative_lookahead_expression(
-                    PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(
-                        ']'
-                    )
+                grammar_builder.rule_reference(RuleName.FILLER),
+                grammar_builder.one_or_more_expression(
+                    grammar_builder.rule_reference(RuleName.RULE)
                 ),
-                PARSER_GRAMMAR_BUILDER.rule_reference(
-                    RuleName.CHARACTER_CONTAINER_ELEMENT
+                grammar_builder.rule_reference(RuleName.END_OF_FILE),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.RULE,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.rule_reference(RuleName.IDENTIFIER),
+                grammar_builder.rule_reference(RuleName.FILLER),
+                grammar_builder.rule_reference(RuleName.LEFT_ARROW),
+                grammar_builder.rule_reference(RuleName.FILLER),
+                grammar_builder.rule_reference(RuleName.EXPRESSION),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.EXPRESSION,
+        grammar_builder.prioritized_choice_expression(
+            [
+                grammar_builder.rule_reference(RuleName.PRIORITIZED_CHOICE),
+                grammar_builder.rule_reference(
+                    RuleName.PRIORITIZED_CHOICE_VARIANT
                 ),
-                PARSER_GRAMMAR_BUILDER.negative_lookahead_expression(
-                    PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(
-                        '-'
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.PRIORITIZED_CHOICE,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.rule_reference(
+                    RuleName.PRIORITIZED_CHOICE_VARIANT
+                ),
+                grammar_builder.one_or_more_expression(
+                    grammar_builder.sequence_expression(
+                        [
+                            grammar_builder.single_quoted_literal_expression(
+                                '/'
+                            ),
+                            grammar_builder.rule_reference(RuleName.FILLER),
+                            grammar_builder.rule_reference(
+                                RuleName.PRIORITIZED_CHOICE_VARIANT
+                            ),
+                        ]
                     )
                 ),
             ]
-        )
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.CHARACTER_CONTAINER_ELEMENT,
-    PARSER_GRAMMAR_BUILDER.prioritized_choice_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.sequence_expression(
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.PRIORITIZED_CHOICE_VARIANT,
+        grammar_builder.prioritized_choice_expression(
+            [
+                grammar_builder.rule_reference(RuleName.SEQUENCE),
+                grammar_builder.rule_reference(RuleName.SEQUENCE_ELEMENT),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.SEQUENCE,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.rule_reference(RuleName.SEQUENCE_ELEMENT),
+                grammar_builder.one_or_more_expression(
+                    grammar_builder.rule_reference(RuleName.SEQUENCE_ELEMENT)
+                ),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.SEQUENCE_ELEMENT,
+        grammar_builder.prioritized_choice_expression(
+            [
+                grammar_builder.rule_reference(
+                    RuleName.NULLABLE_SEQUENCE_ELEMENT
+                ),
+                grammar_builder.rule_reference(
+                    RuleName.NON_NULLABLE_SEQUENCE_ELEMENT
+                ),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.NON_NULLABLE_SEQUENCE_ELEMENT,
+        grammar_builder.prioritized_choice_expression(
+            [
+                grammar_builder.rule_reference(RuleName.EXACT_REPETITION),
+                grammar_builder.rule_reference(RuleName.ONE_OR_MORE),
+                grammar_builder.rule_reference(
+                    RuleName.POSITIVE_OR_MORE_EXPRESSION
+                ),
+                grammar_builder.rule_reference(
+                    RuleName.POSITIVE_REPETITION_RANGE
+                ),
+                grammar_builder.rule_reference(RuleName.NON_NULLABLE_TERM),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.NULLABLE_SEQUENCE_ELEMENT,
+        grammar_builder.prioritized_choice_expression(
+            [
+                grammar_builder.sequence_expression(
+                    [
+                        grammar_builder.single_quoted_literal_expression('('),
+                        grammar_builder.rule_reference(RuleName.FILLER),
+                        grammar_builder.rule_reference(
+                            RuleName.NULLABLE_SEQUENCE_ELEMENT
+                        ),
+                        grammar_builder.single_quoted_literal_expression(')'),
+                        grammar_builder.rule_reference(RuleName.FILLER),
+                    ]
+                ),
+                grammar_builder.rule_reference(RuleName.NEGATIVE_LOOKAHEAD),
+                grammar_builder.rule_reference(RuleName.POSITIVE_LOOKAHEAD),
+                grammar_builder.rule_reference(RuleName.OPTIONAL),
+                grammar_builder.rule_reference(RuleName.ZERO_OR_MORE),
+                grammar_builder.rule_reference(RuleName.ZERO_REPETITION_RANGE),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.NEGATIVE_LOOKAHEAD,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.single_quoted_literal_expression('!'),
+                grammar_builder.rule_reference(RuleName.FILLER),
+                grammar_builder.rule_reference(
+                    RuleName.NON_NULLABLE_SEQUENCE_ELEMENT
+                ),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.POSITIVE_LOOKAHEAD,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.single_quoted_literal_expression('&'),
+                grammar_builder.rule_reference(RuleName.FILLER),
+                grammar_builder.rule_reference(
+                    RuleName.NON_NULLABLE_SEQUENCE_ELEMENT
+                ),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.EXACT_REPETITION,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.rule_reference(RuleName.NON_NULLABLE_TERM),
+                grammar_builder.single_quoted_literal_expression('{'),
+                grammar_builder.rule_reference(RuleName.FILLER),
+                grammar_builder.rule_reference(RuleName.UNSIGNED_INTEGER),
+                grammar_builder.rule_reference(RuleName.FILLER),
+                grammar_builder.single_quoted_literal_expression('}'),
+                grammar_builder.rule_reference(RuleName.FILLER),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.OPTIONAL,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.rule_reference(RuleName.NON_NULLABLE_TERM),
+                grammar_builder.single_quoted_literal_expression('?'),
+                grammar_builder.rule_reference(RuleName.FILLER),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.ONE_OR_MORE,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.rule_reference(RuleName.NON_NULLABLE_TERM),
+                grammar_builder.single_quoted_literal_expression('+'),
+                grammar_builder.rule_reference(RuleName.FILLER),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.POSITIVE_OR_MORE_EXPRESSION,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.rule_reference(RuleName.NON_NULLABLE_TERM),
+                grammar_builder.single_quoted_literal_expression('{'),
+                grammar_builder.rule_reference(RuleName.FILLER),
+                grammar_builder.rule_reference(RuleName.UNSIGNED_INTEGER),
+                grammar_builder.rule_reference(RuleName.FILLER),
+                grammar_builder.single_quoted_literal_expression(','),
+                grammar_builder.rule_reference(RuleName.FILLER),
+                grammar_builder.single_quoted_literal_expression('}'),
+                grammar_builder.rule_reference(RuleName.FILLER),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.POSITIVE_REPETITION_RANGE,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.rule_reference(RuleName.NON_NULLABLE_TERM),
+                grammar_builder.single_quoted_literal_expression('{'),
+                grammar_builder.rule_reference(RuleName.FILLER),
+                grammar_builder.rule_reference(RuleName.UNSIGNED_INTEGER),
+                grammar_builder.rule_reference(RuleName.FILLER),
+                grammar_builder.single_quoted_literal_expression(','),
+                grammar_builder.rule_reference(RuleName.FILLER),
+                grammar_builder.rule_reference(RuleName.UNSIGNED_INTEGER),
+                grammar_builder.rule_reference(RuleName.FILLER),
+                grammar_builder.single_quoted_literal_expression('}'),
+                grammar_builder.rule_reference(RuleName.FILLER),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.ZERO_OR_MORE,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.rule_reference(RuleName.NON_NULLABLE_TERM),
+                grammar_builder.single_quoted_literal_expression('*'),
+                grammar_builder.rule_reference(RuleName.FILLER),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.ZERO_REPETITION_RANGE,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.rule_reference(RuleName.NON_NULLABLE_TERM),
+                grammar_builder.single_quoted_literal_expression('{'),
+                grammar_builder.rule_reference(RuleName.FILLER),
+                grammar_builder.single_quoted_literal_expression(','),
+                grammar_builder.rule_reference(RuleName.FILLER),
+                grammar_builder.rule_reference(RuleName.UNSIGNED_INTEGER),
+                grammar_builder.rule_reference(RuleName.FILLER),
+                grammar_builder.single_quoted_literal_expression('}'),
+                grammar_builder.rule_reference(RuleName.FILLER),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.NON_NULLABLE_TERM,
+        grammar_builder.prioritized_choice_expression(
+            [
+                grammar_builder.sequence_expression(
+                    [
+                        grammar_builder.single_quoted_literal_expression('('),
+                        grammar_builder.rule_reference(RuleName.FILLER),
+                        grammar_builder.prioritized_choice_expression(
+                            [
+                                grammar_builder.rule_reference(
+                                    RuleName.PRIORITIZED_CHOICE
+                                ),
+                                grammar_builder.rule_reference(
+                                    RuleName.SEQUENCE
+                                ),
+                                grammar_builder.rule_reference(
+                                    RuleName.NON_NULLABLE_SEQUENCE_ELEMENT
+                                ),
+                            ]
+                        ),
+                        grammar_builder.single_quoted_literal_expression(')'),
+                        grammar_builder.rule_reference(RuleName.FILLER),
+                    ]
+                ),
+                grammar_builder.rule_reference(RuleName.ANY_CHARACTER),
+                grammar_builder.rule_reference(
+                    RuleName.COMPLEMENTED_CHARACTER_CLASS
+                ),
+                grammar_builder.rule_reference(RuleName.CHARACTER_CLASS),
+                grammar_builder.rule_reference(RuleName.DOUBLE_QUOTED_LITERAL),
+                grammar_builder.rule_reference(RuleName.SINGLE_QUOTED_LITERAL),
+                grammar_builder.rule_reference(RuleName.RULE_REFERENCE),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.RULE_REFERENCE,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.rule_reference(RuleName.IDENTIFIER),
+                grammar_builder.rule_reference(RuleName.FILLER),
+                grammar_builder.negative_lookahead_expression(
+                    grammar_builder.rule_reference(RuleName.LEFT_ARROW)
+                ),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.ANY_CHARACTER,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.single_quoted_literal_expression('.'),
+                grammar_builder.rule_reference(RuleName.FILLER),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.DOUBLE_QUOTED_LITERAL_CHARACTER,
+        grammar_builder.prioritized_choice_expression(
+            [
+                grammar_builder.sequence_expression(
+                    [
+                        grammar_builder.single_quoted_literal_expression('\\'),
+                        grammar_builder.character_class_expression(
+                            [
+                                CharacterSet(
+                                    DOUBLE_QUOTED_LITERAL_SPECIAL_CHARACTERS
+                                    + COMMON_SPECIAL_CHARACTERS
+                                )
+                            ]
+                        ),
+                    ]
+                ),
+                grammar_builder.sequence_expression(
+                    [
+                        grammar_builder.negative_lookahead_expression(
+                            grammar_builder.single_quoted_literal_expression(
+                                '\\'
+                            )
+                        ),
+                        grammar_builder.any_character_expression(),
+                    ]
+                ),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.SINGLE_QUOTED_LITERAL_CHARACTER,
+        grammar_builder.prioritized_choice_expression(
+            [
+                grammar_builder.sequence_expression(
+                    [
+                        grammar_builder.single_quoted_literal_expression('\\'),
+                        grammar_builder.character_class_expression(
+                            [
+                                CharacterSet(
+                                    SINGLE_QUOTED_LITERAL_SPECIAL_CHARACTERS
+                                    + COMMON_SPECIAL_CHARACTERS
+                                )
+                            ]
+                        ),
+                    ]
+                ),
+                grammar_builder.sequence_expression(
+                    [
+                        grammar_builder.negative_lookahead_expression(
+                            grammar_builder.single_quoted_literal_expression(
+                                '\\'
+                            )
+                        ),
+                        grammar_builder.any_character_expression(),
+                    ]
+                ),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.CHARACTER_CLASS,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.single_quoted_literal_expression('['),
+                grammar_builder.one_or_more_expression(
+                    grammar_builder.rule_reference(
+                        RuleName.CHARACTER_CONTAINER
+                    )
+                ),
+                grammar_builder.single_quoted_literal_expression(']'),
+                grammar_builder.rule_reference(RuleName.FILLER),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.COMPLEMENTED_CHARACTER_CLASS,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.single_quoted_literal_expression('[^'),
+                grammar_builder.one_or_more_expression(
+                    grammar_builder.rule_reference(
+                        RuleName.CHARACTER_CONTAINER
+                    )
+                ),
+                grammar_builder.single_quoted_literal_expression(']'),
+                grammar_builder.rule_reference(RuleName.FILLER),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.CHARACTER_CONTAINER,
+        grammar_builder.prioritized_choice_expression(
+            [
+                grammar_builder.rule_reference(RuleName.CHARACTER_RANGE),
+                grammar_builder.rule_reference(RuleName.CHARACTER_SET),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.CHARACTER_RANGE,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.negative_lookahead_expression(
+                    grammar_builder.single_quoted_literal_expression(']')
+                ),
+                grammar_builder.rule_reference(
+                    RuleName.CHARACTER_CONTAINER_ELEMENT
+                ),
+                grammar_builder.single_quoted_literal_expression('-'),
+                grammar_builder.rule_reference(
+                    RuleName.CHARACTER_CONTAINER_ELEMENT
+                ),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.CHARACTER_SET,
+        grammar_builder.one_or_more_expression(
+            grammar_builder.sequence_expression(
                 [
-                    PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(
-                        '\\'
+                    grammar_builder.negative_lookahead_expression(
+                        grammar_builder.single_quoted_literal_expression(']')
                     ),
-                    PARSER_GRAMMAR_BUILDER.character_class_expression(
+                    grammar_builder.rule_reference(
+                        RuleName.CHARACTER_CONTAINER_ELEMENT
+                    ),
+                    grammar_builder.negative_lookahead_expression(
+                        grammar_builder.single_quoted_literal_expression('-')
+                    ),
+                ]
+            )
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.CHARACTER_CONTAINER_ELEMENT,
+        grammar_builder.prioritized_choice_expression(
+            [
+                grammar_builder.sequence_expression(
+                    [
+                        grammar_builder.single_quoted_literal_expression('\\'),
+                        grammar_builder.character_class_expression(
+                            [
+                                CharacterSet(
+                                    CHARACTER_CLASS_SPECIAL_CHARACTERS
+                                    + COMMON_SPECIAL_CHARACTERS
+                                )
+                            ]
+                        ),
+                    ]
+                ),
+                grammar_builder.sequence_expression(
+                    [
+                        grammar_builder.negative_lookahead_expression(
+                            grammar_builder.single_quoted_literal_expression(
+                                '\\'
+                            )
+                        ),
+                        grammar_builder.any_character_expression(),
+                    ]
+                ),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.DOUBLE_QUOTED_LITERAL,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.single_quoted_literal_expression('"'),
+                grammar_builder.zero_or_more_expression(
+                    grammar_builder.sequence_expression(
                         [
-                            CharacterSet(
-                                CHARACTER_CLASS_SPECIAL_CHARACTERS
-                                + COMMON_SPECIAL_CHARACTERS
-                            )
+                            grammar_builder.negative_lookahead_expression(
+                                grammar_builder.single_quoted_literal_expression(
+                                    '"'
+                                )
+                            ),
+                            grammar_builder.rule_reference(
+                                RuleName.DOUBLE_QUOTED_LITERAL_CHARACTER
+                            ),
                         ]
-                    ),
-                ]
-            ),
-            PARSER_GRAMMAR_BUILDER.sequence_expression(
-                [
-                    PARSER_GRAMMAR_BUILDER.negative_lookahead_expression(
-                        PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(
-                            '\\'
-                        )
-                    ),
-                    PARSER_GRAMMAR_BUILDER.any_character_expression(),
-                ]
-            ),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.DOUBLE_QUOTED_LITERAL,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('"'),
-            PARSER_GRAMMAR_BUILDER.zero_or_more_expression(
-                PARSER_GRAMMAR_BUILDER.sequence_expression(
+                    )
+                ),
+                grammar_builder.single_quoted_literal_expression('"'),
+                grammar_builder.rule_reference(RuleName.FILLER),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.SINGLE_QUOTED_LITERAL,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.single_quoted_literal_expression("'"),
+                grammar_builder.zero_or_more_expression(
+                    grammar_builder.sequence_expression(
+                        [
+                            grammar_builder.negative_lookahead_expression(
+                                grammar_builder.single_quoted_literal_expression(
+                                    "'"
+                                )
+                            ),
+                            grammar_builder.rule_reference(
+                                RuleName.SINGLE_QUOTED_LITERAL_CHARACTER
+                            ),
+                        ]
+                    )
+                ),
+                grammar_builder.single_quoted_literal_expression("'"),
+                grammar_builder.rule_reference(RuleName.FILLER),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.END_OF_FILE,
+        grammar_builder.negative_lookahead_expression(
+            grammar_builder.any_character_expression()
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.END_OF_LINE,
+        grammar_builder.prioritized_choice_expression(
+            [
+                grammar_builder.single_quoted_literal_expression('\r\n'),
+                grammar_builder.single_quoted_literal_expression('\n'),
+                grammar_builder.single_quoted_literal_expression('\r'),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.IDENTIFIER,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.character_class_expression(
                     [
-                        PARSER_GRAMMAR_BUILDER.negative_lookahead_expression(
-                            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(
-                                '"'
-                            )
-                        ),
-                        PARSER_GRAMMAR_BUILDER.rule_reference(
-                            RuleName.DOUBLE_QUOTED_LITERAL_CHARACTER
-                        ),
-                    ]
-                )
-            ),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('"'),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.SINGLE_QUOTED_LITERAL,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression("'"),
-            PARSER_GRAMMAR_BUILDER.zero_or_more_expression(
-                PARSER_GRAMMAR_BUILDER.sequence_expression(
-                    [
-                        PARSER_GRAMMAR_BUILDER.negative_lookahead_expression(
-                            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(
-                                "'"
-                            )
-                        ),
-                        PARSER_GRAMMAR_BUILDER.rule_reference(
-                            RuleName.SINGLE_QUOTED_LITERAL_CHARACTER
-                        ),
-                    ]
-                )
-            ),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression("'"),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.FILLER),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.END_OF_FILE,
-    PARSER_GRAMMAR_BUILDER.negative_lookahead_expression(
-        PARSER_GRAMMAR_BUILDER.any_character_expression()
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.END_OF_LINE,
-    PARSER_GRAMMAR_BUILDER.prioritized_choice_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('\r\n'),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('\n'),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('\r'),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.IDENTIFIER,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.character_class_expression(
-                [
-                    CharacterRange('a', 'z'),
-                    CharacterRange('A', 'Z'),
-                    CharacterSet('_'),
-                ]
-            ),
-            PARSER_GRAMMAR_BUILDER.zero_or_more_expression(
-                PARSER_GRAMMAR_BUILDER.character_class_expression(
-                    [
-                        CharacterRange('0', '9'),
                         CharacterRange('a', 'z'),
                         CharacterRange('A', 'Z'),
                         CharacterSet('_'),
                     ]
-                )
-            ),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.FILLER,
-    PARSER_GRAMMAR_BUILDER.zero_or_more_expression(
-        PARSER_GRAMMAR_BUILDER.prioritized_choice_expression(
-            [
-                PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.SPACE),
-                PARSER_GRAMMAR_BUILDER.rule_reference(
-                    RuleName.SINGLE_LINE_COMMENT
+                ),
+                grammar_builder.zero_or_more_expression(
+                    grammar_builder.character_class_expression(
+                        [
+                            CharacterRange('0', '9'),
+                            CharacterRange('a', 'z'),
+                            CharacterRange('A', 'Z'),
+                            CharacterSet('_'),
+                        ]
+                    )
                 ),
             ]
-        )
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.SINGLE_LINE_COMMENT,
-    PARSER_GRAMMAR_BUILDER.sequence_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('#'),
-            PARSER_GRAMMAR_BUILDER.zero_or_more_expression(
-                PARSER_GRAMMAR_BUILDER.sequence_expression(
-                    [
-                        PARSER_GRAMMAR_BUILDER.negative_lookahead_expression(
-                            PARSER_GRAMMAR_BUILDER.rule_reference(
-                                RuleName.END_OF_LINE
-                            )
-                        ),
-                        PARSER_GRAMMAR_BUILDER.any_character_expression(),
-                    ]
-                )
-            ),
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.END_OF_LINE),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.SPACE,
-    PARSER_GRAMMAR_BUILDER.prioritized_choice_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.rule_reference(RuleName.END_OF_LINE),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression(' '),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('\t'),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.UNSIGNED_INTEGER,
-    PARSER_GRAMMAR_BUILDER.prioritized_choice_expression(
-        [
-            PARSER_GRAMMAR_BUILDER.sequence_expression(
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.FILLER,
+        grammar_builder.zero_or_more_expression(
+            grammar_builder.prioritized_choice_expression(
                 [
-                    PARSER_GRAMMAR_BUILDER.character_class_expression(
-                        [CharacterRange('1', '9')]
-                    ),
-                    PARSER_GRAMMAR_BUILDER.zero_or_more_expression(
-                        PARSER_GRAMMAR_BUILDER.character_class_expression(
-                            [CharacterRange('0', '9')]
-                        )
+                    grammar_builder.rule_reference(RuleName.SPACE),
+                    grammar_builder.rule_reference(
+                        RuleName.SINGLE_LINE_COMMENT
                     ),
                 ]
-            ),
-            PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('0'),
-        ]
-    ),
-)
-PARSER_GRAMMAR_BUILDER.add_rule(
-    RuleName.LEFT_ARROW,
-    PARSER_GRAMMAR_BUILDER.single_quoted_literal_expression('<-'),
-)
-assert (
-    len(
-        extra_rule_names := [
-            rule_name
-            for rule_name in RuleName
-            if (
+            )
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.SINGLE_LINE_COMMENT,
+        grammar_builder.sequence_expression(
+            [
+                grammar_builder.single_quoted_literal_expression('#'),
+                grammar_builder.zero_or_more_expression(
+                    grammar_builder.sequence_expression(
+                        [
+                            grammar_builder.negative_lookahead_expression(
+                                grammar_builder.rule_reference(
+                                    RuleName.END_OF_LINE
+                                )
+                            ),
+                            grammar_builder.any_character_expression(),
+                        ]
+                    )
+                ),
+                grammar_builder.rule_reference(RuleName.END_OF_LINE),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.SPACE,
+        grammar_builder.prioritized_choice_expression(
+            [
+                grammar_builder.rule_reference(RuleName.END_OF_LINE),
+                grammar_builder.single_quoted_literal_expression(' '),
+                grammar_builder.single_quoted_literal_expression('\t'),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.UNSIGNED_INTEGER,
+        grammar_builder.prioritized_choice_expression(
+            [
+                grammar_builder.sequence_expression(
+                    [
+                        grammar_builder.character_class_expression(
+                            [CharacterRange('1', '9')]
+                        ),
+                        grammar_builder.zero_or_more_expression(
+                            grammar_builder.character_class_expression(
+                                [CharacterRange('0', '9')]
+                            )
+                        ),
+                    ]
+                ),
+                grammar_builder.single_quoted_literal_expression('0'),
+            ]
+        ),
+    )
+    grammar_builder.add_rule(
+        RuleName.LEFT_ARROW,
+        grammar_builder.single_quoted_literal_expression('<-'),
+    )
+    assert (
+        len(
+            extra_rule_names := [
                 rule_name
-                not in PARSER_GRAMMAR_BUILDER._rule_expression_builder_indices
-            )
-        ]
-    )
-    == 0
-), extra_rule_names
-assert (
-    len(
-        missing_expression_classes := [
-            cls
-            for cls in to_package_non_abstract_subclasses(Expression)  # type: ignore[type-abstract]
-            if (
-                cls.__name__
-                not in PARSER_GRAMMAR_BUILDER._rule_expression_builder_indices
-            )
-        ]
-    )
-    == 0
-), missing_expression_classes
-PARSER_GRAMMAR: Final[Grammar[Any, Any]] = PARSER_GRAMMAR_BUILDER.build()
+                for rule_name in RuleName
+                if (
+                    rule_name
+                    not in grammar_builder._rule_expression_builder_indices
+                )
+            ]
+        )
+        == 0
+    ), extra_rule_names
+    assert (
+        len(
+            missing_expression_classes := [
+                cls
+                for cls in to_package_non_abstract_subclasses(Expression)  # type: ignore[type-abstract]
+                if (
+                    cls.__name__
+                    not in grammar_builder._rule_expression_builder_indices
+                )
+            ]
+        )
+        == 0
+    ), missing_expression_classes
+    return grammar_builder.build()
+
+
+PARSER_GRAMMAR: Final[Grammar[AnyMatch, AnyMismatch]] = _build_parser_grammar()
 assert (
     len(
         unsupported_classes := [
