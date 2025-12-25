@@ -327,7 +327,7 @@ def _(
     /,
     *,
     expression_builders: Sequence[ExpressionBuilder[AnyMatch, AnyMismatch]],
-    visited_expression_builder_indices: list[bool],
+    used_expression_builder_indices: list[bool],
 ) -> None:
     return
 
