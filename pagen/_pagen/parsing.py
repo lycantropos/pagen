@@ -4,7 +4,7 @@ import contextlib
 import inspect
 from collections.abc import Iterator, Mapping
 from enum import Enum, unique
-from typing import Any, ClassVar, Final, TypeVar
+from typing import ClassVar, Final, TypeVar
 
 from typing_extensions import override
 
@@ -774,8 +774,11 @@ assert (
 
 
 def parse_grammar(
-    text: str, /, *, parser_grammar: Grammar[Any, Any] = PARSER_GRAMMAR
-) -> Grammar[Any, Any]:
+    text: str,
+    /,
+    *,
+    parser_grammar: Grammar[AnyMatch, AnyMismatch] = PARSER_GRAMMAR,
+) -> Grammar[AnyMatch, AnyMismatch]:
     tree = parser_grammar.parse(text, starting_rule_name='Grammar')
     grammar_builder = GrammarBuilder()
     TreeToGrammarVisitor(grammar_builder).visit(tree)
