@@ -137,12 +137,6 @@ class Expression(ABC, Generic[MatchT_co, MismatchT_co]):
         raise NotImplementedError
 
     @abstractmethod
-    def equals_to(
-        self, other: Expression[Any, Any], /, *, visited_rule_names: set[str]
-    ) -> bool:
-        raise NotImplementedError
-
-    @abstractmethod
     def evaluate(
         self,
         text: str,
@@ -151,6 +145,7 @@ class Expression(ABC, Generic[MatchT_co, MismatchT_co]):
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[MatchT_co, MismatchT_co]:
         raise NotImplementedError
 
@@ -179,7 +174,9 @@ class Expression(ABC, Generic[MatchT_co, MismatchT_co]):
         )
 
     @abstractmethod
-    def to_expected_message(self, /) -> str:
+    def to_expected_message(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> str:
         raise NotImplementedError
 
     @abstractmethod
@@ -192,7 +189,11 @@ class Expression(ABC, Generic[MatchT_co, MismatchT_co]):
 
     @abstractmethod
     def to_seed_failure(
-        self, rule_name: str | None, /
+        self,
+        rule_name: str | None,
+        /,
+        *,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationFailure[MismatchT_co]:
         raise NotImplementedError
 
@@ -202,13 +203,9 @@ class Expression(ABC, Generic[MatchT_co, MismatchT_co]):
     @overload
     def __eq__(self, other: Any, /) -> Any: ...
 
-    @override
+    @abstractmethod
     def __eq__(self, other: Any, /) -> Any:
-        return (
-            self.equals_to(other, visited_rule_names=set())
-            if isinstance(other, Expression)
-            else NotImplemented
-        )
+        raise NotImplementedError
 
     @abstractmethod
     def __repr__(self, /) -> str:
@@ -227,12 +224,6 @@ class AnyCharacterExpression(Expression[MatchLeaf, MismatchLeaf]):
         return ExpressionPrecedence.TERM
 
     @override
-    def equals_to(
-        self, other: Expression[Any, Any], /, *, visited_rule_names: set[str]
-    ) -> bool:
-        return isinstance(other, AnyCharacterExpression)
-
-    @override
     def evaluate(
         self,
         text: str,
@@ -241,6 +232,7 @@ class AnyCharacterExpression(Expression[MatchLeaf, MismatchLeaf]):
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[MatchLeaf, MismatchLeaf]:
         return (
             EvaluationSuccess(
@@ -250,7 +242,7 @@ class AnyCharacterExpression(Expression[MatchLeaf, MismatchLeaf]):
             else EvaluationFailure(
                 MismatchLeaf(
                     rule_name or str(self),
-                    expected_message=self.to_expected_message(),
+                    expected_message=self.to_expected_message(rules=rules),
                     start_index=index,
                     stop_index=index + 1,
                 )
@@ -258,7 +250,9 @@ class AnyCharacterExpression(Expression[MatchLeaf, MismatchLeaf]):
         )
 
     @override
-    def to_expected_message(self, /) -> str:
+    def to_expected_message(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> str:
         return 'any character'
 
     @override
@@ -271,7 +265,11 @@ class AnyCharacterExpression(Expression[MatchLeaf, MismatchLeaf]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /
+        self,
+        rule_name: str | None,
+        /,
+        *,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationFailure[MismatchLeaf]:
         return EvaluationFailure(
             MismatchLeaf(
@@ -289,6 +287,16 @@ class AnyCharacterExpression(Expression[MatchLeaf, MismatchLeaf]):
             f'type {AnyCharacterExpression.__qualname__!r} '
             'is not an acceptable base type'
         )
+
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any, /) -> Any:
+        return isinstance(other, AnyCharacterExpression) or NotImplemented
 
     @override
     def __str__(self, /) -> str:
@@ -313,15 +321,6 @@ class CharacterClassExpression(Expression[MatchLeaf, MismatchLeaf]):
         return self._elements
 
     @override
-    def equals_to(
-        self, other: Expression[Any, Any], /, *, visited_rule_names: set[str]
-    ) -> bool:
-        return (
-            isinstance(other, CharacterClassExpression)
-            and self._elements == other._elements  # noqa: SLF001
-        )
-
-    @override
     def evaluate(
         self,
         text: str,
@@ -330,12 +329,13 @@ class CharacterClassExpression(Expression[MatchLeaf, MismatchLeaf]):
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[MatchLeaf, MismatchLeaf]:
         if index >= len(text):
             return EvaluationFailure(
                 MismatchLeaf(
                     rule_name or str(self),
-                    expected_message=self.to_expected_message(),
+                    expected_message=self.to_expected_message(rules=rules),
                     start_index=index,
                     stop_index=index + 1,
                 )
@@ -347,7 +347,7 @@ class CharacterClassExpression(Expression[MatchLeaf, MismatchLeaf]):
             else EvaluationFailure(
                 MismatchLeaf(
                     rule_name or str(self),
-                    expected_message=self.to_expected_message(),
+                    expected_message=self.to_expected_message(rules=rules),
                     start_index=index,
                     stop_index=index + 1,
                 )
@@ -355,7 +355,9 @@ class CharacterClassExpression(Expression[MatchLeaf, MismatchLeaf]):
         )
 
     @override
-    def to_expected_message(self, /) -> str:
+    def to_expected_message(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> str:
         return f'a character from {self}'
 
     @override
@@ -368,7 +370,11 @@ class CharacterClassExpression(Expression[MatchLeaf, MismatchLeaf]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /
+        self,
+        rule_name: str | None,
+        /,
+        *,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationFailure[MismatchLeaf]:
         return EvaluationFailure(
             MismatchLeaf(
@@ -402,6 +408,20 @@ class CharacterClassExpression(Expression[MatchLeaf, MismatchLeaf]):
         self._elements = merge_consecutive_character_sets(elements)
         return self
 
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any, /) -> Any:
+        return (
+            self._elements == other._elements
+            if isinstance(other, CharacterClassExpression)
+            else NotImplemented
+        )
+
     @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._elements!r})'
@@ -427,15 +447,6 @@ class ComplementedCharacterClassExpression(
         return self._elements
 
     @override
-    def equals_to(
-        self, other: Expression[Any, Any], /, *, visited_rule_names: set[str]
-    ) -> bool:
-        return (
-            isinstance(other, ComplementedCharacterClassExpression)
-            and self._elements == other._elements  # noqa: SLF001
-        )
-
-    @override
     def evaluate(
         self,
         text: str,
@@ -444,12 +455,13 @@ class ComplementedCharacterClassExpression(
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[MatchLeaf, MismatchLeaf]:
         if index >= len(text):
             return EvaluationFailure(
                 MismatchLeaf(
                     rule_name or str(self),
-                    expected_message=self.to_expected_message(),
+                    expected_message=self.to_expected_message(rules=rules),
                     start_index=index,
                     stop_index=index + 1,
                 )
@@ -461,7 +473,7 @@ class ComplementedCharacterClassExpression(
             else EvaluationFailure(
                 MismatchLeaf(
                     rule_name or str(self),
-                    expected_message=self.to_expected_message(),
+                    expected_message=self.to_expected_message(rules=rules),
                     start_index=index,
                     stop_index=index + 1,
                 )
@@ -469,7 +481,9 @@ class ComplementedCharacterClassExpression(
         )
 
     @override
-    def to_expected_message(self, /) -> str:
+    def to_expected_message(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> str:
         return f'a character from {self}'
 
     @override
@@ -482,7 +496,11 @@ class ComplementedCharacterClassExpression(
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /
+        self,
+        rule_name: str | None,
+        /,
+        *,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationFailure[MismatchLeaf]:
         return EvaluationFailure(
             MismatchLeaf(
@@ -516,6 +534,20 @@ class ComplementedCharacterClassExpression(
         self._elements = merge_consecutive_character_sets(elements)
         return self
 
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any, /) -> Any:
+        return (
+            self._elements == other._elements
+            if isinstance(other, ComplementedCharacterClassExpression)
+            else NotImplemented
+        )
+
     @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._elements!r})'
@@ -543,18 +575,6 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
         return self._expression
 
     @override
-    def equals_to(
-        self, other: Expression[Any, Any], /, *, visited_rule_names: set[str]
-    ) -> bool:
-        return (
-            isinstance(other, ExactRepetitionExpression)
-            and self._count == other._count
-            and self._expression.equals_to(
-                other._expression, visited_rule_names=visited_rule_names
-            )
-        )
-
-    @override
     def evaluate(
         self,
         text: str,
@@ -563,12 +583,13 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[MatchTree, MismatchTree]:
         children: list[MatchLeaf | MatchTree] = []
         expression = self._expression
         for _ in range(self._count):
             result = expression.evaluate(
-                text, index, cache=cache, rule_name=None
+                text, index, cache=cache, rule_name=None, rules=rules
             )
             if (match := result.match) is not None:
                 assert isinstance(match, MatchLeaf | MatchTree), (
@@ -588,9 +609,11 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
         return EvaluationSuccess(MatchTree(rule_name, children=children), None)
 
     @override
-    def to_expected_message(self, /) -> str:
+    def to_expected_message(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> str:
         return (
-            f'{self._expression.to_expected_message()} '
+            f'{self._expression.to_expected_message(rules=rules)} '
             f'repeated {self._count} times'
         )
 
@@ -604,7 +627,11 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /
+        self,
+        rule_name: str | None,
+        /,
+        *,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationFailure[MismatchTree]:
         return EvaluationFailure(
             MismatchTree(
@@ -649,6 +676,23 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
         self._count, self._expression = count, expression
         return self
 
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any, /) -> Any:
+        return (
+            (
+                self._count == other._count
+                and self._expression == other._expression
+            )
+            if isinstance(other, ExactRepetitionExpression)
+            else NotImplemented
+        )
+
     @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._expression!r})'
@@ -675,15 +719,6 @@ class LiteralExpression(Expression[MatchLeaf, MismatchLeaf]):
         pass
 
     @override
-    def equals_to(
-        self, other: Expression[Any, Any], /, *, visited_rule_names: set[str]
-    ) -> bool:
-        return (
-            isinstance(other, type(self))
-            and self.characters == other.characters
-        )
-
-    @override
     def evaluate(
         self,
         text: str,
@@ -692,12 +727,13 @@ class LiteralExpression(Expression[MatchLeaf, MismatchLeaf]):
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[MatchLeaf, MismatchLeaf]:
         return (
             EvaluationFailure(
                 MismatchLeaf(
                     rule_name or str(self),
-                    expected_message=self.to_expected_message(),
+                    expected_message=self.to_expected_message(rules=rules),
                     start_index=index,
                     stop_index=index + 1,
                 )
@@ -709,7 +745,9 @@ class LiteralExpression(Expression[MatchLeaf, MismatchLeaf]):
         )
 
     @override
-    def to_expected_message(self, /) -> str:
+    def to_expected_message(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> str:
         return repr(self.characters)
 
     @override
@@ -722,7 +760,11 @@ class LiteralExpression(Expression[MatchLeaf, MismatchLeaf]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /
+        self,
+        rule_name: str | None,
+        /,
+        *,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationFailure[MismatchLeaf]:
         return EvaluationFailure(
             MismatchLeaf(
@@ -732,8 +774,6 @@ class LiteralExpression(Expression[MatchLeaf, MismatchLeaf]):
                 stop_index=1,
             )
         )
-
-    __slots__ = ()
 
     @classmethod
     def _validate_characters(cls, value: str, /) -> None:
@@ -745,6 +785,22 @@ class LiteralExpression(Expression[MatchLeaf, MismatchLeaf]):
                 f'at least {cls.MIN_CHARACTERS_COUNT} characters, '
                 f'but got {value!r}.'
             )
+
+    __slots__ = ()
+
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any, /) -> Any:
+        return (
+            self.characters == other.characters
+            if isinstance(other, type(self))
+            else NotImplemented
+        )
 
     @override
     def __repr__(self, /) -> str:
@@ -823,17 +879,6 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
         return self._expression
 
     @override
-    def equals_to(
-        self, other: Expression[Any, Any], /, *, visited_rule_names: set[str]
-    ) -> bool:
-        return isinstance(
-            other, NegativeLookaheadExpression
-        ) and self._expression.equals_to(
-            other._expression,  # noqa: SLF001
-            visited_rule_names=visited_rule_names,
-        )
-
-    @override
     def evaluate(
         self,
         text: str,
@@ -842,15 +887,16 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[LookaheadMatch, MismatchLeaf]:
         result = self._expression.evaluate(
-            text, index, cache=cache, rule_name=None
+            text, index, cache=cache, rule_name=None, rules=rules
         )
         if is_success(result):
             return EvaluationFailure(
                 MismatchLeaf(
                     rule_name or str(self),
-                    expected_message=self.to_expected_message(),
+                    expected_message=self.to_expected_message(rules=rules),
                     start_index=index,
                     stop_index=index + result.match.characters_count,
                 )
@@ -859,8 +905,10 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
         return EvaluationSuccess(LookaheadMatch(rule_name), result.mismatch)
 
     @override
-    def to_expected_message(self, /) -> str:
-        return f'not {self._expression.to_expected_message()}'
+    def to_expected_message(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> str:
+        return f'not {self._expression.to_expected_message(rules=rules)}'
 
     @override
     def to_match_classes(self, /) -> Iterable[type[LookaheadMatch]]:
@@ -872,7 +920,11 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /
+        self,
+        rule_name: str | None,
+        /,
+        *,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationFailure[MismatchLeaf]:
         return EvaluationFailure(
             MismatchLeaf(
@@ -902,6 +954,20 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
         self._expression = expression
         return self
 
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any, /) -> Any:
+        return (
+            self._expression == other._expression
+            if isinstance(other, NegativeLookaheadExpression)
+            else NotImplemented
+        )
+
     @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._expression!r})'
@@ -926,17 +992,6 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
         return self._expression
 
     @override
-    def equals_to(
-        self, other: Expression[Any, Any], /, *, visited_rule_names: set[str]
-    ) -> bool:
-        return isinstance(
-            other, OneOrMoreExpression
-        ) and self._expression.equals_to(
-            other._expression,  # noqa: SLF001
-            visited_rule_names=visited_rule_names,
-        )
-
-    @override
     def evaluate(
         self,
         text: str,
@@ -945,10 +1000,11 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[MatchTree, MismatchTree]:
         expression = self._expression
         first_result = expression.evaluate(
-            text, index, cache=cache, rule_name=None
+            text, index, cache=cache, rule_name=None, rules=rules
         )
         matches: list[MatchLeaf | MatchTree]
         if is_success(first_result):
@@ -968,7 +1024,7 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
             )
         while is_success(
             result := expression.evaluate(
-                text, index, cache=cache, rule_name=None
+                text, index, cache=cache, rule_name=None, rules=rules
             )
         ):
             match = result.match
@@ -985,9 +1041,12 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
         )
 
     @override
-    def to_expected_message(self, /) -> str:
+    def to_expected_message(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> str:
         return (
-            f'{self._expression.to_expected_message()} repeated at least once'
+            f'{self._expression.to_expected_message(rules=rules)} '
+            'repeated at least once'
         )
 
     @override
@@ -999,7 +1058,11 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /
+        self,
+        rule_name: str | None,
+        /,
+        *,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationFailure[MismatchTree]:
         return EvaluationFailure(
             MismatchTree(
@@ -1034,6 +1097,20 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
         self._expression = expression
         return self
 
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any, /) -> Any:
+        return (
+            self._expression == other._expression
+            if isinstance(other, OneOrMoreExpression)
+            else NotImplemented
+        )
+
     @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._expression!r})'
@@ -1058,17 +1135,6 @@ class OptionalExpression(Expression[AnyMatch, AnyMismatch]):
         return self._expression
 
     @override
-    def equals_to(
-        self, other: Expression[Any, Any], /, *, visited_rule_names: set[str]
-    ) -> bool:
-        return isinstance(
-            other, OptionalExpression
-        ) and self._expression.equals_to(
-            other._expression,  # noqa: SLF001
-            visited_rule_names=visited_rule_names,
-        )
-
-    @override
     def evaluate(
         self,
         text: str,
@@ -1077,18 +1143,22 @@ class OptionalExpression(Expression[AnyMatch, AnyMismatch]):
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationSuccess[AnyMatch, AnyMismatch]:
         result = self._expression.evaluate(
-            text, index, cache=cache, rule_name=rule_name
+            text, index, cache=cache, rule_name=rule_name, rules=rules
         )
         if is_success(result):
             return result
         assert is_failure(result), (rule_name, result)
         return EvaluationSuccess(LookaheadMatch(rule_name), result.mismatch)
 
-    def to_expected_message(self, /) -> str:
+    def to_expected_message(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> str:
         return (
-            f'{self._expression.to_expected_message()} repeated at most once'
+            f'{self._expression.to_expected_message(rules=rules)} '
+            'repeated at most once'
         )
 
     @override
@@ -1102,7 +1172,11 @@ class OptionalExpression(Expression[AnyMatch, AnyMismatch]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /
+        self,
+        rule_name: str | None,
+        /,
+        *,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationFailure[AnyMismatch]:
         raise ValueError(self)
 
@@ -1124,6 +1198,20 @@ class OptionalExpression(Expression[AnyMatch, AnyMismatch]):
         self = super().__new__(cls)
         self._expression = expression
         return self
+
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any, /) -> Any:
+        return (
+            self._expression == other._expression
+            if isinstance(other, OptionalExpression)
+            else NotImplemented
+        )
 
     @override
     def __repr__(self, /) -> str:
@@ -1149,17 +1237,6 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
         return self._expression
 
     @override
-    def equals_to(
-        self, other: Expression[Any, Any], /, *, visited_rule_names: set[str]
-    ) -> bool:
-        return isinstance(
-            other, PositiveLookaheadExpression
-        ) and self._expression.equals_to(
-            other._expression,  # noqa: SLF001
-            visited_rule_names=visited_rule_names,
-        )
-
-    @override
     def evaluate(
         self,
         text: str,
@@ -1168,16 +1245,17 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[LookaheadMatch, MismatchLeaf]:
         result = self._expression.evaluate(
-            text, index, cache=cache, rule_name=None
+            text, index, cache=cache, rule_name=None, rules=rules
         )
         if is_failure(result):
             assert result.mismatch.start_index == index, (rule_name, result)
             return EvaluationFailure(
                 MismatchLeaf(
                     rule_name or str(self),
-                    expected_message=self.to_expected_message(),
+                    expected_message=self.to_expected_message(rules=rules),
                     start_index=index,
                     stop_index=result.mismatch.stop_index,
                 )
@@ -1185,8 +1263,10 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
         return EvaluationSuccess(LookaheadMatch(rule_name), None)
 
     @override
-    def to_expected_message(self, /) -> str:
-        return self._expression.to_expected_message()
+    def to_expected_message(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> str:
+        return self._expression.to_expected_message(rules=rules)
 
     @override
     def to_match_classes(self, /) -> Iterable[type[LookaheadMatch]]:
@@ -1198,7 +1278,11 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /
+        self,
+        rule_name: str | None,
+        /,
+        *,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationFailure[MismatchLeaf]:
         return EvaluationFailure(
             MismatchLeaf(
@@ -1227,6 +1311,20 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
         self = super().__new__(cls)
         self._expression = expression
         return self
+
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any, /) -> Any:
+        return (
+            self._expression == other._expression
+            if isinstance(other, PositiveLookaheadExpression)
+            else NotImplemented
+        )
 
     @override
     def __repr__(self, /) -> str:
@@ -1258,18 +1356,6 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
         return self._start
 
     @override
-    def equals_to(
-        self, other: Expression[Any, Any], /, *, visited_rule_names: set[str]
-    ) -> bool:
-        return (
-            isinstance(other, PositiveOrMoreExpression)
-            and self._start == other._start
-            and self._expression.equals_to(
-                other._expression, visited_rule_names=visited_rule_names
-            )
-        )
-
-    @override
     def evaluate(
         self,
         text: str,
@@ -1278,12 +1364,13 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[MatchTree, MismatchTree]:
         children: list[MatchLeaf | MatchTree] = []
         expression = self._expression
         for _ in range(self._start):
             result = expression.evaluate(
-                text, index, cache=cache, rule_name=None
+                text, index, cache=cache, rule_name=None, rules=rules
             )
             if (match := result.match) is not None:
                 assert isinstance(match, MatchLeaf | MatchTree)
@@ -1298,7 +1385,7 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
                 )
         while not is_failure(
             result := expression.evaluate(
-                text, index, cache=cache, rule_name=None
+                text, index, cache=cache, rule_name=None, rules=rules
             )
         ):
             match = result.match
@@ -1313,9 +1400,11 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
         )
 
     @override
-    def to_expected_message(self, /) -> str:
+    def to_expected_message(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> str:
         return (
-            f'{self._expression.to_expected_message()} '
+            f'{self._expression.to_expected_message(rules=rules)} '
             f'repeated at least {self._start} times'
         )
 
@@ -1329,7 +1418,11 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /
+        self,
+        rule_name: str | None,
+        /,
+        *,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationFailure[MismatchTree]:
         return EvaluationFailure(
             MismatchTree(
@@ -1374,6 +1467,23 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
         self._expression, self._start = expression, start
         return self
 
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any, /) -> Any:
+        return (
+            (
+                self._start == other._start
+                and self._expression == other._expression
+            )
+            if isinstance(other, PositiveOrMoreExpression)
+            else NotImplemented
+        )
+
     @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._expression!r})'
@@ -1408,19 +1518,6 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
         return self._start
 
     @override
-    def equals_to(
-        self, other: Expression[Any, Any], /, *, visited_rule_names: set[str]
-    ) -> bool:
-        return (
-            isinstance(other, PositiveRepetitionRangeExpression)
-            and self._start == other._start
-            and self._end == other._end
-            and self._expression.equals_to(
-                other._expression, visited_rule_names=visited_rule_names
-            )
-        )
-
-    @override
     def evaluate(
         self,
         text: str,
@@ -1429,12 +1526,13 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[MatchTree, MismatchTree]:
         matches: list[MatchLeaf | MatchTree] = []
         expression = self._expression
         for _ in range(self._start):
             result = expression.evaluate(
-                text, index, cache=cache, rule_name=None
+                text, index, cache=cache, rule_name=None, rules=rules
             )
             if is_success(result):
                 match = result.match
@@ -1451,7 +1549,7 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
         final_mismatch: AnyMismatch | None = None
         for _ in range(self._start, self._end):
             result = expression.evaluate(
-                text, index, cache=cache, rule_name=None
+                text, index, cache=cache, rule_name=None, rules=rules
             )
             assert self.is_valid_result(result)
             if is_success(result):
@@ -1474,9 +1572,11 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
         )
 
     @override
-    def to_expected_message(self, /) -> str:
+    def to_expected_message(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> str:
         return (
-            f'{self._expression.to_expected_message()} '
+            f'{self._expression.to_expected_message(rules=rules)} '
             f'repeated from {self._start} to {self._end} times'
         )
 
@@ -1490,7 +1590,11 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /
+        self,
+        rule_name: str | None,
+        /,
+        *,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationFailure[MismatchTree]:
         return EvaluationFailure(
             MismatchTree(
@@ -1544,9 +1648,34 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
         self._expression, self._end, self._start = expression, end, start
         return self
 
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any, /) -> Any:
+        return (
+            (
+                self._start == other._start
+                and self._end == other._end
+                and self._expression == other._expression
+            )
+            if isinstance(other, PositiveRepetitionRangeExpression)
+            else NotImplemented
+        )
+
     @override
     def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self._expression!r})'
+        return (
+            f'{type(self).__qualname__}'
+            '('
+            f'{self._expression!r}, '
+            f'{self._start!r}, '
+            f'{self._end!r}'
+            ')'
+        )
 
     @override
     def __str__(self, /) -> str:
@@ -1568,25 +1697,6 @@ class PrioritizedChoiceExpression(Expression[AnyMatch, MismatchTree]):
         return self._variants
 
     @override
-    def equals_to(
-        self, other: Expression[Any, Any], /, *, visited_rule_names: set[str]
-    ) -> bool:
-        return (
-            isinstance(other, PrioritizedChoiceExpression)
-            and len(self._variants) == len(other._variants)  # noqa: SLF001
-            and all(
-                variant.equals_to(
-                    other_variant, visited_rule_names=visited_rule_names
-                )
-                for variant, other_variant in zip(
-                    self._variants,
-                    other._variants,  # noqa: SLF001
-                    strict=True,
-                )
-            )
-        )
-
-    @override
     def evaluate(
         self,
         text: str,
@@ -1595,11 +1705,12 @@ class PrioritizedChoiceExpression(Expression[AnyMatch, MismatchTree]):
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[MatchT_co, MismatchTree]:
         variant_mismatches: list[AnyMismatch] = []
         for variant in self._variants:
             variant_result = variant.evaluate(
-                text, index, cache=cache, rule_name=rule_name
+                text, index, cache=cache, rule_name=rule_name, rules=rules
             )
             if is_success(variant_result):
                 return variant_result
@@ -1611,9 +1722,12 @@ class PrioritizedChoiceExpression(Expression[AnyMatch, MismatchTree]):
         )
 
     @override
-    def to_expected_message(self, /) -> str:
+    def to_expected_message(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> str:
         return ' or '.join(
-            variant.to_expected_message() for variant in self._variants
+            variant.to_expected_message(rules=rules)
+            for variant in self._variants
         )
 
     @override
@@ -1627,7 +1741,11 @@ class PrioritizedChoiceExpression(Expression[AnyMatch, MismatchTree]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /
+        self,
+        rule_name: str | None,
+        /,
+        *,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationFailure[MismatchTree]:
         return EvaluationFailure(
             MismatchTree(
@@ -1661,6 +1779,28 @@ class PrioritizedChoiceExpression(Expression[AnyMatch, MismatchTree]):
         self._variants = variants
         return self
 
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any, /) -> Any:
+        return (
+            (
+                len(self._variants) == len(other._variants)
+                and all(
+                    variant == other_variant
+                    for variant, other_variant in zip(
+                        self._variants, other._variants, strict=True
+                    )
+                )
+            )
+            if isinstance(other, PrioritizedChoiceExpression)
+            else NotImplemented
+        )
+
     @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._variants!r})'
@@ -1688,27 +1828,6 @@ class RuleReference(Expression[AnyMatch, AnyMismatch]):
         return self._name
 
     @override
-    def equals_to(
-        self, other: Expression[Any, Any], /, *, visited_rule_names: set[str]
-    ) -> bool:
-        if not (
-            isinstance(other, RuleReference)
-            and (
-                self._name == other._name  # noqa: SLF001
-                and self._referent_name == other._referent_name  # noqa: SLF001
-            )
-        ):
-            return False
-        if self._name in visited_rule_names:
-            return True
-        visited_rule_names.add(self._name)
-        result = self.resolve().expression.equals_to(
-            other.resolve().expression, visited_rule_names=visited_rule_names
-        )
-        visited_rule_names.remove(self._name)
-        return result
-
-    @override
     def evaluate(
         self,
         text: str,
@@ -1717,17 +1836,24 @@ class RuleReference(Expression[AnyMatch, AnyMismatch]):
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[AnyMatch, AnyMismatch]:
-        return self.resolve().parse(
-            text, index, cache=cache, rule_name=self._name
+        return self.resolve(rules=rules).parse(
+            text, index, cache=cache, rule_name=self._name, rules=rules
         )
 
-    def resolve(self, /) -> Rule[AnyMatch, AnyMismatch]:
-        return self._rules[self._referent_name]
+    def resolve(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> Rule[AnyMatch, AnyMismatch]:
+        return rules[self._referent_name]
 
     @override
-    def to_expected_message(self, /) -> str:
-        return self.resolve().expression.to_expected_message()
+    def to_expected_message(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> str:
+        return self.resolve(rules=rules).expression.to_expected_message(
+            rules=rules
+        )
 
     @override
     def to_match_classes(self) -> Iterable[type[AnyMatch]]:
@@ -1739,22 +1865,26 @@ class RuleReference(Expression[AnyMatch, AnyMismatch]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /
+        self,
+        rule_name: str | None,
+        /,
+        *,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationFailure[AnyMismatch]:
-        return self.resolve().expression.to_seed_failure(rule_name)
+        return self.resolve(rules=rules).expression.to_seed_failure(
+            rule_name, rules=rules
+        )
 
     _match_classes: Sequence[type[AnyMatch]]
     _mismatch_classes: Sequence[type[AnyMismatch]]
     _name: str
     _referent_name: str
-    _rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
 
     __slots__ = (
         '_match_classes',
         '_mismatch_classes',
         '_name',
         '_referent_name',
-        '_rules',
     )
 
     def __init_subclass__(cls, /) -> None:
@@ -1771,25 +1901,47 @@ class RuleReference(Expression[AnyMatch, AnyMismatch]):
         *,
         match_classes: Sequence[type[AnyMatch]],
         mismatch_classes: Sequence[type[AnyMismatch]],
-        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> Self:
         assert len(name) > 0, name
+        assert len(match_classes) > 0, match_classes
+        assert len(mismatch_classes) > 0, mismatch_classes
         self = super().__new__(cls)
         (
             self._match_classes,
             self._mismatch_classes,
             self._name,
             self._referent_name,
-            self._rules,
-        ) = (match_classes, mismatch_classes, name, referent_name, rules)
+        ) = (match_classes, mismatch_classes, name, referent_name)
         return self
+
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any) -> Any:
+        return (
+            (
+                self._name == other._name
+                and self._referent_name == other._referent_name
+                and self._match_classes == other._match_classes
+                and self._mismatch_classes == other._mismatch_classes
+            )
+            if isinstance(other, RuleReference)
+            else NotImplemented
+        )
 
     @override
     def __repr__(self, /) -> str:
         return (
             f'{type(self).__qualname__}'
             '('
-            f'{self._name!r}, {self._referent_name!r}, rules={self._rules!r}'
+            f'{self._name!r}, '
+            f'{self._referent_name!r}, '
+            f'match_classes={self._match_classes!r}, '
+            f'mismatch_classes={self._mismatch_classes!r}'
             ')'
         )
 
@@ -1810,25 +1962,6 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
         return self._elements
 
     @override
-    def equals_to(
-        self, other: Expression[Any, Any], /, *, visited_rule_names: set[str]
-    ) -> bool:
-        return (
-            isinstance(other, SequenceExpression)
-            and len(self._elements) == len(other._elements)  # noqa: SLF001
-            and all(
-                element.equals_to(
-                    other_element, visited_rule_names=visited_rule_names
-                )
-                for element, other_element in zip(
-                    self._elements,
-                    other._elements,  # noqa: SLF001
-                    strict=True,
-                )
-            )
-        )
-
-    @override
     def evaluate(
         self,
         text: str,
@@ -1837,11 +1970,12 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[MatchTree, MismatchTree]:
         element_successes: list[EvaluationSuccess[AnyMatch, AnyMismatch]] = []
         for element in self._elements:
             element_result = element.evaluate(
-                text, index, cache=cache, rule_name=None
+                text, index, cache=cache, rule_name=None, rules=rules
             )
             if is_success(element_result):
                 element_successes.append(element_result)
@@ -1892,9 +2026,12 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
         )
 
     @override
-    def to_expected_message(self, /) -> str:
+    def to_expected_message(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> str:
         return ' followed by '.join(
-            element.to_expected_message() for element in self._elements
+            element.to_expected_message(rules=rules)
+            for element in self._elements
         )
 
     @override
@@ -1906,7 +2043,11 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /
+        self,
+        rule_name: str | None,
+        /,
+        *,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationFailure[MismatchTree]:
         return EvaluationFailure(
             MismatchTree(
@@ -1944,6 +2085,28 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
         self._elements = elements
         return self
 
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any, /) -> Any:
+        return (
+            (
+                len(self._elements) == len(other._elements)
+                and all(
+                    element == other_element
+                    for element, other_element in zip(
+                        self._elements, other._elements, strict=True
+                    )
+                )
+            )
+            if isinstance(other, SequenceExpression)
+            else NotImplemented
+        )
+
     @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._elements!r})'
@@ -1973,17 +2136,6 @@ class ZeroOrMoreExpression(
         return self._expression
 
     @override
-    def equals_to(
-        self, other: Expression[Any, Any], /, *, visited_rule_names: set[str]
-    ) -> bool:
-        return isinstance(
-            other, ZeroOrMoreExpression
-        ) and self._expression.equals_to(
-            other._expression,  # noqa: SLF001
-            visited_rule_names=visited_rule_names,
-        )
-
-    @override
     def evaluate(
         self,
         text: str,
@@ -1992,12 +2144,13 @@ class ZeroOrMoreExpression(
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationSuccess[LookaheadMatch | MatchTree, MismatchTree]:
         matches: list[MatchLeaf | MatchTree] = []
         expression = self._expression
         while is_success(
             result := expression.evaluate(
-                text, index, cache=cache, rule_name=None
+                text, index, cache=cache, rule_name=None, rules=rules
             )
         ):
             match = result.match
@@ -2018,9 +2171,11 @@ class ZeroOrMoreExpression(
         )
 
     @override
-    def to_expected_message(self, /) -> str:
+    def to_expected_message(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> str:
         return (
-            f'{self._expression.to_expected_message()} '
+            f'{self._expression.to_expected_message(rules=rules)} '
             'repeated any amount of times or none at all'
         )
 
@@ -2037,7 +2192,11 @@ class ZeroOrMoreExpression(
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /
+        self,
+        rule_name: str | None,
+        /,
+        *,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationFailure[MismatchTree]:
         return EvaluationFailure(
             MismatchTree(
@@ -2072,6 +2231,20 @@ class ZeroOrMoreExpression(
         self._expression = expression
         return self
 
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any) -> Any:
+        return (
+            self._expression == other._expression
+            if isinstance(other, ZeroOrMoreExpression)
+            else NotImplemented
+        )
+
     @override
     def __repr__(self, /) -> str:
         return f'{type(self).__qualname__}({self._expression!r})'
@@ -2104,18 +2277,6 @@ class ZeroRepetitionRangeExpression(
         return self._expression
 
     @override
-    def equals_to(
-        self, other: Expression[Any, Any], /, *, visited_rule_names: set[str]
-    ) -> bool:
-        return (
-            isinstance(other, ZeroRepetitionRangeExpression)
-            and self._end == other._end
-            and self._expression.equals_to(
-                other._expression, visited_rule_names=visited_rule_names
-            )
-        )
-
-    @override
     def evaluate(
         self,
         text: str,
@@ -2124,13 +2285,14 @@ class ZeroRepetitionRangeExpression(
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationSuccess[LookaheadMatch | MatchTree, AnyMismatch]:
         matches: list[MatchLeaf | MatchTree] = []
         expression = self._expression
         final_mismatch: AnyMismatch | None = None
         for _ in range(self._end):
             result = expression.evaluate(
-                text, index, cache=cache, rule_name=None
+                text, index, cache=cache, rule_name=None, rules=rules
             )
             if is_success(result):
                 match = result.match
@@ -2159,9 +2321,11 @@ class ZeroRepetitionRangeExpression(
         )
 
     @override
-    def to_expected_message(self, /) -> str:
+    def to_expected_message(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> str:
         return (
-            f'{self._expression.to_expected_message()} '
+            f'{self._expression.to_expected_message(rules=rules)} '
             f'repeated at most {self._end} times'
         )
 
@@ -2178,7 +2342,11 @@ class ZeroRepetitionRangeExpression(
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /
+        self,
+        rule_name: str | None,
+        /,
+        *,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationFailure[AnyMismatch]:
         raise ValueError(self)
 
@@ -2211,6 +2379,20 @@ class ZeroRepetitionRangeExpression(
         self = super().__new__(cls)
         self._end, self._expression = end, expression
         return self
+
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any) -> Any:
+        return (
+            self._expression == other._expression
+            if isinstance(other, ZeroOrMoreExpression)
+            else NotImplemented
+        )
 
     @override
     def __repr__(self, /) -> str:

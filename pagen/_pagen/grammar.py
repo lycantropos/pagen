@@ -22,12 +22,12 @@ class Grammar(Generic[MatchT_co, MismatchT_co]):
     MIN_RULES_COUNT: ClassVar[int] = 1
 
     @property
-    def rules(self, /) -> Mapping[str, Rule[MatchT_co, MismatchT_co]]:
-        return self._rules
+    def rule_names(self, /) -> Sequence[str]:
+        return list(self._rules)
 
     def parse(self, value: str, /, *, starting_rule_name: str) -> MatchT_co:
         result = self._rules[starting_rule_name].parse(
-            value, 0, cache={}, rule_name=None
+            value, 0, cache={}, rule_name=None, rules=self._rules
         )
         if is_failure(result):
             grouped_origin_path_with_expected_message_pairs: dict[

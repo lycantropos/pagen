@@ -173,40 +173,37 @@ class GrammarBuilder:
     _rule_expression_builder_indices: dict[str, int]
 
     def _build(self, /) -> Grammar[AnyMatch, AnyMismatch]:
-        rules: dict[
-            str,
-            LeftRecursiveRule[AnyMatch, AnyMismatch]
-            | NonLeftRecursiveRule[AnyMatch, AnyMismatch],
-        ] = {}
-        for (
-            rule_name,
-            rule_expression_builder_index,
-        ) in self._rule_expression_builder_indices.items():
-            rule_expression_builder = self._expression_builders[
-                rule_expression_builder_index
-            ]
-            rule_expression = rule_expression_builder.build(
-                expression_builders=self._expression_builders,
-                rule_expression_builder_indices=(
-                    self._rule_expression_builder_indices
-                ),
-                rules=rules,
-            )
-            if rule_expression_builder.is_left_recursive(
-                expression_builders=self._expression_builders,
-                rule_expression_builder_indices=(
-                    self._rule_expression_builder_indices
-                ),
-                visited_rule_names=set(),
-            ):
-                rules[rule_name] = LeftRecursiveRule(
-                    rule_name, rule_expression
+        return Grammar(
+            {
+                rule_name: (
+                    LeftRecursiveRule
+                    if (
+                        rule_expression_builder := self._expression_builders[
+                            rule_expression_builder_index
+                        ]
+                    ).is_left_recursive(
+                        expression_builders=self._expression_builders,
+                        rule_expression_builder_indices=(
+                            self._rule_expression_builder_indices
+                        ),
+                        visited_rule_names=set(),
+                    )
+                    else NonLeftRecursiveRule
+                )(
+                    rule_name,
+                    rule_expression_builder.build(
+                        expression_builders=self._expression_builders,
+                        rule_expression_builder_indices=(
+                            self._rule_expression_builder_indices
+                        ),
+                    ),
                 )
-            else:
-                rules[rule_name] = NonLeftRecursiveRule(
-                    rule_name, rule_expression
-                )
-        return Grammar(rules)
+                for (
+                    rule_name,
+                    rule_expression_builder_index,
+                ) in self._rule_expression_builder_indices.items()
+            }
+        )
 
     def _register_expression_builder(
         self, expression_builder: ExpressionBuilder[AnyMatch, AnyMismatch], /

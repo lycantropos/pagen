@@ -35,7 +35,6 @@ from .expressions import (
 )
 from .match import AnyMatch, LookaheadMatch, MatchLeaf, MatchT_co, MatchTree
 from .mismatch import AnyMismatch, MismatchLeaf, MismatchT_co, MismatchTree
-from .rule import Rule
 
 
 class ExpressionBuilder(ABC, Generic[MatchT_co, MismatchT_co]):
@@ -61,7 +60,6 @@ class ExpressionBuilder(ABC, Generic[MatchT_co, MismatchT_co]):
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-        rules: Mapping[str, Rule[Any, Any]],
     ) -> Expression[MatchT_co, MismatchT_co]:
         raise NotImplementedError
 
@@ -196,7 +194,6 @@ class AnyCharacterExpressionBuilder(
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-        rules: Mapping[str, Rule[Any, Any]],
     ) -> AnyCharacterExpression:
         return AnyCharacterExpression()
 
@@ -305,7 +302,6 @@ class CharacterClassExpressionBuilder(
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-        rules: Mapping[str, Rule[Any, Any]],
     ) -> CharacterClassExpression:
         return CharacterClassExpression(self._elements)
 
@@ -425,7 +421,6 @@ class ComplementedCharacterClassExpressionBuilder(
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-        rules: Mapping[str, Rule[Any, Any]],
     ) -> ComplementedCharacterClassExpression:
         return ComplementedCharacterClassExpression(self._elements)
 
@@ -557,7 +552,6 @@ class ExactRepetitionExpressionBuilder(
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-        rules: Mapping[str, Rule[Any, Any]],
     ) -> ExactRepetitionExpression:
         expression_builder = self._get_expression_builder(
             expression_builders=expression_builders,
@@ -572,7 +566,6 @@ class ExactRepetitionExpressionBuilder(
             expression_builder.build(
                 expression_builders=expression_builders,
                 rule_expression_builder_indices=rule_expression_builder_indices,
-                rules=rules,
             ),
             self._count,
         )
@@ -804,7 +797,6 @@ class DoubleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-        rules: Mapping[str, Rule[Any, Any]],
     ) -> DoubleQuotedLiteralExpression:
         return DoubleQuotedLiteralExpression(self._value)
 
@@ -841,7 +833,6 @@ class SingleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-        rules: Mapping[str, Rule[Any, Any]],
     ) -> SingleQuotedLiteralExpression:
         return SingleQuotedLiteralExpression(self._value)
 
@@ -904,7 +895,6 @@ class NegativeLookaheadExpressionBuilder(
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-        rules: Mapping[str, Rule[Any, Any]],
     ) -> NegativeLookaheadExpression:
         expression_builder = self._get_expression_builder(
             expression_builders=expression_builders,
@@ -919,7 +909,6 @@ class NegativeLookaheadExpressionBuilder(
             expression_builder.build(
                 expression_builders=expression_builders,
                 rule_expression_builder_indices=rule_expression_builder_indices,
-                rules=rules,
             )
         )
 
@@ -1080,7 +1069,6 @@ class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-        rules: Mapping[str, Rule[Any, Any]],
     ) -> OneOrMoreExpression:
         expression_builder = self._get_expression_builder(
             expression_builders=expression_builders,
@@ -1095,7 +1083,6 @@ class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
             expression_builder.build(
                 expression_builders=expression_builders,
                 rule_expression_builder_indices=rule_expression_builder_indices,
-                rules=rules,
             )
         )
 
@@ -1253,7 +1240,6 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch, AnyMismatch]):
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-        rules: Mapping[str, Rule[Any, Any]],
     ) -> OptionalExpression:
         expression_builder = self._get_expression_builder(
             expression_builders=expression_builders,
@@ -1268,7 +1254,6 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch, AnyMismatch]):
             expression_builder.build(
                 expression_builders=expression_builders,
                 rule_expression_builder_indices=rule_expression_builder_indices,
-                rules=rules,
             )
         )
 
@@ -1446,7 +1431,6 @@ class PositiveLookaheadExpressionBuilder(
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-        rules: Mapping[str, Rule[Any, Any]],
     ) -> PositiveLookaheadExpression:
         expression_builder = self._get_expression_builder(
             expression_builders=expression_builders,
@@ -1461,7 +1445,6 @@ class PositiveLookaheadExpressionBuilder(
             expression_builder.build(
                 expression_builders=expression_builders,
                 rule_expression_builder_indices=rule_expression_builder_indices,
-                rules=rules,
             )
         )
 
@@ -1623,7 +1606,6 @@ class PositiveOrMoreExpressionBuilder(
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-        rules: Mapping[str, Rule[Any, Any]],
     ) -> PositiveOrMoreExpression:
         expression_builder = self._get_expression_builder(
             expression_builders=expression_builders,
@@ -1638,7 +1620,6 @@ class PositiveOrMoreExpressionBuilder(
             expression_builder.build(
                 expression_builders=expression_builders,
                 rule_expression_builder_indices=rule_expression_builder_indices,
-                rules=rules,
             ),
             self._start,
         )
@@ -1817,7 +1798,6 @@ class PositiveRepetitionRangeExpressionBuilder(
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-        rules: Mapping[str, Rule[Any, Any]],
     ) -> PositiveRepetitionRangeExpression:
         expression_builder = self._get_expression_builder(
             expression_builders=expression_builders,
@@ -1832,7 +1812,6 @@ class PositiveRepetitionRangeExpressionBuilder(
             expression_builder.build(
                 expression_builders=expression_builders,
                 rule_expression_builder_indices=rule_expression_builder_indices,
-                rules=rules,
             ),
             self._start,
             self._end,
@@ -2031,7 +2010,6 @@ class PrioritizedChoiceExpressionBuilder(
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-        rules: Mapping[str, Rule[Any, Any]],
     ) -> PrioritizedChoiceExpression:
         variant_builders = [
             expression_builders[variant_builder_index]
@@ -2065,7 +2043,6 @@ class PrioritizedChoiceExpressionBuilder(
                     rule_expression_builder_indices=(
                         rule_expression_builder_indices
                     ),
-                    rules=rules,
                 )
                 for variant_builder in variant_builders
             ]
@@ -2252,7 +2229,6 @@ class RuleReferenceBuilder(ExpressionBuilder[AnyMatch, AnyMismatch]):
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-        rules: Mapping[str, Rule[Any, Any]],
     ) -> RuleReference:
         cursor = self
         visited_rule_names: list[str] = []
@@ -2297,7 +2273,6 @@ class RuleReferenceBuilder(ExpressionBuilder[AnyMatch, AnyMismatch]):
                             visited_rule_names=set(),
                         )
                     ),
-                    rules=rules,
                 )
             cursor = candidate
 
@@ -2489,7 +2464,6 @@ class SequenceExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-        rules: Mapping[str, Rule[Any, Any]],
     ) -> SequenceExpression:
         element_builders = [
             expression_builders[element_builder_index]
@@ -2517,7 +2491,6 @@ class SequenceExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
                     rule_expression_builder_indices=(
                         rule_expression_builder_indices
                     ),
-                    rules=rules,
                 )
                 for element_builder in element_builders
             ]
@@ -2705,7 +2678,6 @@ class ZeroOrMoreExpressionBuilder(
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-        rules: Mapping[str, Rule[Any, Any]],
     ) -> ZeroOrMoreExpression:
         expression_builder = self._get_expression_builder(
             expression_builders=expression_builders,
@@ -2720,7 +2692,6 @@ class ZeroOrMoreExpressionBuilder(
             expression_builder.build(
                 expression_builders=expression_builders,
                 rule_expression_builder_indices=rule_expression_builder_indices,
-                rules=rules,
             )
         )
 
@@ -2883,7 +2854,6 @@ class ZeroRepetitionRangeExpressionBuilder(
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-        rules: Mapping[str, Rule[Any, Any]],
     ) -> ZeroRepetitionRangeExpression:
         expression_builder = self._get_expression_builder(
             expression_builders=expression_builders,
@@ -2898,7 +2868,6 @@ class ZeroRepetitionRangeExpressionBuilder(
             expression_builder.build(
                 expression_builders=expression_builders,
                 rule_expression_builder_indices=rule_expression_builder_indices,
-                rules=rules,
             ),
             self._end,
         )

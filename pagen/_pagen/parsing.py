@@ -766,7 +766,7 @@ assert (
         unsupported_classes := [
             cls
             for cls in to_package_non_abstract_subclasses(Expression)  # type: ignore[type-abstract]
-            if cls.__name__ not in PARSER_GRAMMAR.rules
+            if cls.__name__ not in PARSER_GRAMMAR.rule_names
         ]
     )
     == 0

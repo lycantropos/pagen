@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from typing import Any, Generic, final, overload
 
 from typing_extensions import Self, override
@@ -30,6 +31,7 @@ class Rule(ABC, Generic[MatchT_co, MismatchT_co]):
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[MatchT_co, MismatchT_co]:
         raise NotImplementedError
 
@@ -61,6 +63,7 @@ class LeftRecursiveRule(Rule[MatchT_co, MismatchT_co]):
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[MatchT_co, MismatchT_co]:
         name = self._name if rule_name is None else rule_name
         name_cache = cache.setdefault(name, {})
@@ -70,9 +73,11 @@ class LeftRecursiveRule(Rule[MatchT_co, MismatchT_co]):
                 result,
             )
             return result
-        name_cache[index] = self._expression.to_seed_failure(rule_name)
+        name_cache[index] = self._expression.to_seed_failure(
+            rule_name, rules=rules
+        )
         result = name_cache[index] = self._expression.evaluate(
-            text, index, cache=cache, rule_name=name
+            text, index, cache=cache, rule_name=name, rules=rules
         )
         result_match = result.match
         if result_match is None:
@@ -80,7 +85,7 @@ class LeftRecursiveRule(Rule[MatchT_co, MismatchT_co]):
         last_characters_count = result_match.characters_count
         while True:
             candidate = self._expression.evaluate(
-                text, index, cache=cache, rule_name=name
+                text, index, cache=cache, rule_name=name, rules=rules
             )
             candidate_match = candidate.match
             if (
@@ -122,9 +127,7 @@ class LeftRecursiveRule(Rule[MatchT_co, MismatchT_co]):
         return (
             (
                 self._name == other._name
-                and self._expression.equals_to(
-                    other._expression, visited_rule_names=set()
-                )
+                and self._expression == other._expression
             )
             if isinstance(other, LeftRecursiveRule)
             else NotImplemented
@@ -158,6 +161,7 @@ class NonLeftRecursiveRule(Rule[MatchT_co, MismatchT_co]):
         *,
         cache: dict[str, dict[int, EvaluationResult[AnyMatch, AnyMismatch]]],
         rule_name: str | None,
+        rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[MatchT_co, MismatchT_co]:
         name = self._name if rule_name is None else rule_name
         name_cache = cache.setdefault(name, {})
@@ -168,7 +172,7 @@ class NonLeftRecursiveRule(Rule[MatchT_co, MismatchT_co]):
             )
             return result
         result = name_cache[index] = self._expression.evaluate(
-            text, index, cache=cache, rule_name=name
+            text, index, cache=cache, rule_name=name, rules=rules
         )
         return result
 
@@ -201,9 +205,7 @@ class NonLeftRecursiveRule(Rule[MatchT_co, MismatchT_co]):
         return (
             (
                 self._name == other._name
-                and self._expression.equals_to(
-                    other._expression, visited_rule_names=set()
-                )
+                and self._expression == other._expression
             )
             if isinstance(other, NonLeftRecursiveRule)
             else NotImplemented
