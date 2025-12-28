@@ -1,7 +1,15 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, ClassVar, TypeAlias, TypeVar, final, overload
+from typing import (
+    Any,
+    ClassVar,
+    TypeAlias,
+    TypeGuard,
+    TypeVar,
+    final,
+    overload,
+)
 
 from typing_extensions import Self
 
@@ -122,7 +130,7 @@ class MatchTree:
         return sum(child.characters_count for child in self._children)
 
     @property
-    def children(self, /) -> Sequence[_MatchTreeChild]:
+    def children(self, /) -> Sequence[MatchTreeChild]:
         return self._children
 
     @property
@@ -154,20 +162,20 @@ class MatchTree:
                 invalid_children := [
                     child
                     for child in children
-                    if not isinstance(child, _MatchTreeChild)
+                    if not isinstance(child, MatchTreeChild)
                 ]
             )
             > 0
         ):
             raise TypeError(
-                f'All children must have type {_MatchTreeChild}, '
+                f'All children must have type {MatchTreeChild}, '
                 f'but got {invalid_children!r}.'
             )
         self = super().__new__(cls)
         self._children, self._rule_name = children, rule_name
         return self
 
-    _children: Sequence[_MatchTreeChild]
+    _children: Sequence[MatchTreeChild]
     _rule_name: str | None
 
     @overload
@@ -208,8 +216,11 @@ MatchT_co = TypeVar(
     AnyMatch,
     covariant=True,
 )
+MatchTreeChild: TypeAlias = MatchLeaf | MatchTree
 
-_MatchTreeChild: TypeAlias = MatchLeaf | MatchTree
+
+def is_match_tree_child(value: AnyMatch, /) -> TypeGuard[MatchTreeChild]:
+    return isinstance(value, MatchTreeChild)
 
 
 def _validate_rule_name(rule_name: str | None, /) -> None:

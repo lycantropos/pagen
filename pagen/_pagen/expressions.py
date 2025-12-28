@@ -26,7 +26,15 @@ from .constants import (
     DOUBLE_QUOTED_LITERAL_SPECIAL_CHARACTERS,
     SINGLE_QUOTED_LITERAL_SPECIAL_CHARACTERS,
 )
-from .match import AnyMatch, LookaheadMatch, MatchLeaf, MatchT_co, MatchTree
+from .match import (
+    AnyMatch,
+    LookaheadMatch,
+    MatchLeaf,
+    MatchT_co,
+    MatchTree,
+    MatchTreeChild,
+    is_match_tree_child,
+)
 from .mismatch import AnyMismatch, MismatchLeaf, MismatchT_co, MismatchTree
 
 if TYPE_CHECKING:
@@ -571,7 +579,7 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
         return self._count
 
     @property
-    def expression(self, /) -> Expression[MatchLeaf | MatchTree, AnyMismatch]:
+    def expression(self, /) -> Expression[MatchTreeChild, AnyMismatch]:
         return self._expression
 
     @override
@@ -585,14 +593,14 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
         rule_name: str | None,
         rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[MatchTree, MismatchTree]:
-        children: list[MatchLeaf | MatchTree] = []
+        children: list[MatchTreeChild] = []
         expression = self._expression
         for _ in range(self._count):
             result = expression.evaluate(
                 text, index, cache=cache, rule_name=None, rules=rules
             )
             if (match := result.match) is not None:
-                assert isinstance(match, MatchLeaf | MatchTree), (
+                assert is_match_tree_child(match), (
                     rule_name,
                     children,
                     result,
@@ -648,7 +656,7 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
         )
 
     _count: int
-    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
+    _expression: Expression[MatchTreeChild, AnyMismatch]
 
     __slots__ = '_count', '_expression'
 
@@ -659,10 +667,7 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
         )
 
     def __new__(
-        cls,
-        expression: Expression[MatchLeaf | MatchTree, AnyMismatch],
-        count: int,
-        /,
+        cls, expression: Expression[MatchTreeChild, AnyMismatch], count: int, /
     ) -> Self:
         _validate_repetition_bound(count)
         _validate_expression(expression)
@@ -875,7 +880,7 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
         return ExpressionPrecedence.LOOKAHEAD
 
     @property
-    def expression(self, /) -> Expression[MatchLeaf | MatchTree, AnyMismatch]:
+    def expression(self, /) -> Expression[MatchTreeChild, AnyMismatch]:
         return self._expression
 
     @override
@@ -935,7 +940,7 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
             )
         )
 
-    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
+    _expression: Expression[MatchTreeChild, AnyMismatch]
 
     __slots__ = ('_expression',)
 
@@ -946,7 +951,7 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
         )
 
     def __new__(
-        cls, expression: Expression[MatchLeaf | MatchTree, AnyMismatch], /
+        cls, expression: Expression[MatchTreeChild, AnyMismatch], /
     ) -> Self:
         _validate_expression(expression)
         _validate_progressing_expression(expression)
@@ -988,7 +993,7 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
         return ExpressionPrecedence.REPETITION
 
     @property
-    def expression(self, /) -> Expression[MatchLeaf | MatchTree, AnyMismatch]:
+    def expression(self, /) -> Expression[MatchTreeChild, AnyMismatch]:
         return self._expression
 
     @override
@@ -1006,13 +1011,10 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
         first_result = expression.evaluate(
             text, index, cache=cache, rule_name=None, rules=rules
         )
-        matches: list[MatchLeaf | MatchTree]
+        matches: list[MatchTreeChild]
         if is_success(first_result):
             first_match = first_result.match
-            assert isinstance(first_match, MatchLeaf | MatchTree), (
-                rule_name,
-                first_result,
-            )
+            assert is_match_tree_child(first_match), (rule_name, first_result)
             matches = [first_match]
             index += first_match.characters_count
         else:
@@ -1029,10 +1031,7 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
         ):
             match = result.match
             matches.append(match)
-            assert isinstance(match, MatchLeaf | MatchTree), (
-                rule_name,
-                result,
-            )
+            assert is_match_tree_child(match), (expression, result)
             index += match.characters_count
         assert is_failure(result), (rule_name, result)
         return EvaluationSuccess(
@@ -1078,7 +1077,7 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
             )
         )
 
-    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
+    _expression: Expression[MatchTreeChild, AnyMismatch]
 
     __slots__ = ('_expression',)
 
@@ -1089,7 +1088,7 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
         )
 
     def __new__(
-        cls, expression: Expression[MatchLeaf | MatchTree, AnyMismatch], /
+        cls, expression: Expression[MatchTreeChild, AnyMismatch], /
     ) -> Self:
         _validate_expression(expression)
         _validate_progressing_expression(expression)
@@ -1131,7 +1130,7 @@ class OptionalExpression(Expression[AnyMatch, AnyMismatch]):
         return ExpressionPrecedence.REPETITION
 
     @property
-    def expression(self, /) -> Expression[MatchLeaf | MatchTree, AnyMismatch]:
+    def expression(self, /) -> Expression[MatchTreeChild, AnyMismatch]:
         return self._expression
 
     @override
@@ -1180,7 +1179,7 @@ class OptionalExpression(Expression[AnyMatch, AnyMismatch]):
     ) -> EvaluationFailure[AnyMismatch]:
         raise ValueError(self)
 
-    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
+    _expression: Expression[MatchTreeChild, AnyMismatch]
 
     __slots__ = ('_expression',)
 
@@ -1191,7 +1190,7 @@ class OptionalExpression(Expression[AnyMatch, AnyMismatch]):
         )
 
     def __new__(
-        cls, expression: Expression[MatchLeaf | MatchTree, AnyMismatch], /
+        cls, expression: Expression[MatchTreeChild, AnyMismatch], /
     ) -> Self:
         _validate_expression(expression)
         _validate_progressing_expression(expression)
@@ -1233,7 +1232,7 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
         return ExpressionPrecedence.LOOKAHEAD
 
     @property
-    def expression(self, /) -> Expression[MatchLeaf | MatchTree, AnyMismatch]:
+    def expression(self, /) -> Expression[MatchTreeChild, AnyMismatch]:
         return self._expression
 
     @override
@@ -1293,7 +1292,7 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
             )
         )
 
-    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
+    _expression: Expression[MatchTreeChild, AnyMismatch]
 
     __slots__ = ('_expression',)
 
@@ -1304,7 +1303,7 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
         )
 
     def __new__(
-        cls, expression: Expression[MatchLeaf | MatchTree, AnyMismatch], /
+        cls, expression: Expression[MatchTreeChild, AnyMismatch], /
     ) -> Self:
         _validate_expression(expression)
         _validate_progressing_expression(expression)
@@ -1348,7 +1347,7 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
         return ExpressionPrecedence.REPETITION
 
     @property
-    def expression(self, /) -> Expression[MatchLeaf | MatchTree, AnyMismatch]:
+    def expression(self, /) -> Expression[MatchTreeChild, AnyMismatch]:
         return self._expression
 
     @property
@@ -1366,14 +1365,14 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
         rule_name: str | None,
         rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[MatchTree, MismatchTree]:
-        children: list[MatchLeaf | MatchTree] = []
+        children: list[MatchTreeChild] = []
         expression = self._expression
         for _ in range(self._start):
             result = expression.evaluate(
                 text, index, cache=cache, rule_name=None, rules=rules
             )
             if (match := result.match) is not None:
-                assert isinstance(match, MatchLeaf | MatchTree)
+                assert is_match_tree_child(match)
                 children.append(match)
                 index += match.characters_count
             else:
@@ -1383,18 +1382,16 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
                         rule_name or str(self), children=[result.mismatch]
                     )
                 )
-        while not is_failure(
+        while is_success(
             result := expression.evaluate(
                 text, index, cache=cache, rule_name=None, rules=rules
             )
         ):
             match = result.match
-            assert isinstance(match, MatchLeaf | MatchTree), (
-                rule_name,
-                result,
-            )
+            assert is_match_tree_child(match), (expression, result)
             children.append(match)
             index += match.characters_count
+        assert is_failure(result), (expression, result)
         return EvaluationSuccess(
             MatchTree(rule_name, children=children), result.mismatch
         )
@@ -1438,7 +1435,7 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
             )
         )
 
-    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
+    _expression: Expression[MatchTreeChild, AnyMismatch]
     _start: int
 
     __slots__ = '_expression', '_start'
@@ -1450,10 +1447,7 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
         )
 
     def __new__(
-        cls,
-        expression: Expression[MatchLeaf | MatchTree, AnyMismatch],
-        start: int,
-        /,
+        cls, expression: Expression[MatchTreeChild, AnyMismatch], start: int, /
     ) -> Self:
         _validate_repetition_bound(start)
         _validate_expression(expression)
@@ -1510,7 +1504,7 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
         return self._end
 
     @property
-    def expression(self, /) -> Expression[MatchLeaf | MatchTree, AnyMismatch]:
+    def expression(self, /) -> Expression[MatchTreeChild, AnyMismatch]:
         return self._expression
 
     @property
@@ -1528,7 +1522,7 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
         rule_name: str | None,
         rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[MatchTree, MismatchTree]:
-        matches: list[MatchLeaf | MatchTree] = []
+        matches: list[MatchTreeChild] = []
         expression = self._expression
         for _ in range(self._start):
             result = expression.evaluate(
@@ -1536,7 +1530,7 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
             )
             if is_success(result):
                 match = result.match
-                assert isinstance(match, MatchLeaf | MatchTree)
+                assert is_match_tree_child(match)
                 matches.append(match)
                 index += match.characters_count
             else:
@@ -1554,7 +1548,7 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
             assert self.is_valid_result(result)
             if is_success(result):
                 match = result.match
-                assert isinstance(match, MatchLeaf | MatchTree)
+                assert is_match_tree_child(match)
                 matches.append(match)
                 index += match.characters_count
             else:
@@ -1610,7 +1604,7 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
             )
         )
 
-    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
+    _expression: Expression[MatchTreeChild, AnyMismatch]
     _end: int
     _start: int
 
@@ -1624,7 +1618,7 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
 
     def __new__(
         cls,
-        expression: Expression[MatchLeaf | MatchTree, AnyMismatch],
+        expression: Expression[MatchTreeChild, AnyMismatch],
         start: int,
         end: int,
         /,
@@ -1980,11 +1974,8 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
             if is_success(element_result):
                 element_successes.append(element_result)
                 element_match = element_result.match
-                if isinstance(element_match, LookaheadMatch):
+                if not is_match_tree_child(element_match):
                     continue
-                assert isinstance(element_match, MatchLeaf | MatchTree), (
-                    element_match
-                )  # fmt: skip
                 index += element_match.characters_count
             else:
                 assert is_failure(element_result), (rule_name, element_result)
@@ -2019,7 +2010,7 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
                 children=[
                     element_success.match
                     for element_success in element_successes
-                    if not isinstance(element_success.match, LookaheadMatch)
+                    if is_match_tree_child(element_success.match)
                 ],
             ),
             None,
@@ -2132,7 +2123,7 @@ class ZeroOrMoreExpression(
         return ExpressionPrecedence.REPETITION
 
     @property
-    def expression(self, /) -> Expression[MatchLeaf | MatchTree, AnyMismatch]:
+    def expression(self, /) -> Expression[MatchTreeChild, AnyMismatch]:
         return self._expression
 
     @override
@@ -2146,7 +2137,7 @@ class ZeroOrMoreExpression(
         rule_name: str | None,
         rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationSuccess[LookaheadMatch | MatchTree, MismatchTree]:
-        matches: list[MatchLeaf | MatchTree] = []
+        matches: list[MatchTreeChild] = []
         expression = self._expression
         while is_success(
             result := expression.evaluate(
@@ -2154,10 +2145,7 @@ class ZeroOrMoreExpression(
             )
         ):
             match = result.match
-            assert isinstance(match, MatchLeaf | MatchTree), (
-                rule_name,
-                result,
-            )
+            assert is_match_tree_child(match), (expression, result)
             matches.append(match)
             index += match.characters_count
         assert is_failure(result), (rule_name, result)
@@ -2212,7 +2200,7 @@ class ZeroOrMoreExpression(
             )
         )
 
-    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
+    _expression: Expression[MatchTreeChild, AnyMismatch]
 
     __slots__ = ('_expression',)
 
@@ -2223,7 +2211,7 @@ class ZeroOrMoreExpression(
         )
 
     def __new__(
-        cls, expression: Expression[MatchLeaf | MatchTree, AnyMismatch], /
+        cls, expression: Expression[MatchTreeChild, AnyMismatch], /
     ) -> Self:
         _validate_expression(expression)
         _validate_progressing_expression(expression)
@@ -2273,7 +2261,7 @@ class ZeroRepetitionRangeExpression(
         return self._end
 
     @property
-    def expression(self, /) -> Expression[MatchLeaf | MatchTree, AnyMismatch]:
+    def expression(self, /) -> Expression[MatchTreeChild, AnyMismatch]:
         return self._expression
 
     @override
@@ -2287,7 +2275,7 @@ class ZeroRepetitionRangeExpression(
         rule_name: str | None,
         rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationSuccess[LookaheadMatch | MatchTree, AnyMismatch]:
-        matches: list[MatchLeaf | MatchTree] = []
+        matches: list[MatchTreeChild] = []
         expression = self._expression
         final_mismatch: AnyMismatch | None = None
         for _ in range(self._end):
@@ -2296,10 +2284,7 @@ class ZeroRepetitionRangeExpression(
             )
             if is_success(result):
                 match = result.match
-                assert isinstance(match, MatchLeaf | MatchTree), (
-                    rule_name,
-                    result,
-                )
+                assert is_match_tree_child(match), (rule_name, result)
                 matches.append(match)
                 index += match.characters_count
             else:
@@ -2351,7 +2336,7 @@ class ZeroRepetitionRangeExpression(
         raise ValueError(self)
 
     _end: int
-    _expression: Expression[MatchLeaf | MatchTree, AnyMismatch]
+    _expression: Expression[MatchTreeChild, AnyMismatch]
 
     __slots__ = '_end', '_expression'
 
@@ -2362,10 +2347,7 @@ class ZeroRepetitionRangeExpression(
         )
 
     def __new__(
-        cls,
-        expression: Expression[MatchLeaf | MatchTree, AnyMismatch],
-        end: int,
-        /,
+        cls, expression: Expression[MatchTreeChild, AnyMismatch], end: int, /
     ) -> Self:
         _validate_repetition_bound(end)
         _validate_expression(expression)
@@ -2390,7 +2372,7 @@ class ZeroRepetitionRangeExpression(
     def __eq__(self, other: Any) -> Any:
         return (
             self._expression == other._expression
-            if isinstance(other, ZeroOrMoreExpression)
+            if isinstance(other, ZeroRepetitionRangeExpression)
             else NotImplemented
         )
 
@@ -2454,7 +2436,7 @@ def _escape_single_quoted_literal_characters(
 
 def _is_progressing_expression(
     value: Expression[Any, Any], /
-) -> TypeIs[Expression[MatchLeaf | MatchTree, AnyMismatch]]:
+) -> TypeIs[Expression[MatchTreeChild, AnyMismatch]]:
     return not any(
         issubclass(match_cls, LookaheadMatch)
         for match_cls in value.to_match_classes()
