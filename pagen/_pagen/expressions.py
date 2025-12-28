@@ -1817,10 +1817,6 @@ class RuleReference(Expression[AnyMatch, AnyMismatch]):
     def precedence(cls, /) -> int:
         return ExpressionPrecedence.TERM
 
-    @property
-    def name(self, /) -> str:
-        return self._name
-
     @override
     def evaluate(
         self,
@@ -1832,25 +1828,20 @@ class RuleReference(Expression[AnyMatch, AnyMismatch]):
         rule_name: str | None,
         rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationResult[AnyMatch, AnyMismatch]:
-        return self.resolve(rules=rules).parse(
+        return self._resolve(rules=rules).parse(
             text, index, cache=cache, rule_name=self._name, rules=rules
         )
-
-    def resolve(
-        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
-    ) -> Rule[AnyMatch, AnyMismatch]:
-        return rules[self._referent_name]
 
     @override
     def to_expected_message(
         self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
     ) -> str:
-        return self.resolve(rules=rules).expression.to_expected_message(
+        return self._resolve(rules=rules).expression.to_expected_message(
             rules=rules
         )
 
     @override
-    def to_match_classes(self) -> Iterable[type[AnyMatch]]:
+    def to_match_classes(self, /) -> Iterable[type[AnyMatch]]:
         return iter(self._match_classes)
 
     @override
@@ -1865,21 +1856,20 @@ class RuleReference(Expression[AnyMatch, AnyMismatch]):
         *,
         rules: Mapping[str, Rule[AnyMatch, AnyMismatch]],
     ) -> EvaluationFailure[AnyMismatch]:
-        return self.resolve(rules=rules).expression.to_seed_failure(
+        return self._resolve(rules=rules).expression.to_seed_failure(
             rule_name, rules=rules
         )
 
     _match_classes: Sequence[type[AnyMatch]]
     _mismatch_classes: Sequence[type[AnyMismatch]]
     _name: str
-    _referent_name: str
 
-    __slots__ = (
-        '_match_classes',
-        '_mismatch_classes',
-        '_name',
-        '_referent_name',
-    )
+    def _resolve(
+        self, /, *, rules: Mapping[str, Rule[AnyMatch, AnyMismatch]]
+    ) -> Rule[AnyMatch, AnyMismatch]:
+        return rules[self._name]
+
+    __slots__ = ('_match_classes', '_mismatch_classes', '_name')
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
@@ -1890,7 +1880,6 @@ class RuleReference(Expression[AnyMatch, AnyMismatch]):
     def __new__(
         cls,
         name: str,
-        referent_name: str,
         /,
         *,
         match_classes: Sequence[type[AnyMatch]],
@@ -1900,12 +1889,11 @@ class RuleReference(Expression[AnyMatch, AnyMismatch]):
         assert len(match_classes) > 0, match_classes
         assert len(mismatch_classes) > 0, mismatch_classes
         self = super().__new__(cls)
-        (
-            self._match_classes,
-            self._mismatch_classes,
-            self._name,
-            self._referent_name,
-        ) = (match_classes, mismatch_classes, name, referent_name)
+        self._match_classes, self._mismatch_classes, self._name = (
+            match_classes,
+            mismatch_classes,
+            name,
+        )
         return self
 
     @overload
@@ -1919,7 +1907,6 @@ class RuleReference(Expression[AnyMatch, AnyMismatch]):
         return (
             (
                 self._name == other._name
-                and self._referent_name == other._referent_name
                 and self._match_classes == other._match_classes
                 and self._mismatch_classes == other._mismatch_classes
             )
@@ -1933,7 +1920,6 @@ class RuleReference(Expression[AnyMatch, AnyMismatch]):
             f'{type(self).__qualname__}'
             '('
             f'{self._name!r}, '
-            f'{self._referent_name!r}, '
             f'match_classes={self._match_classes!r}, '
             f'mismatch_classes={self._mismatch_classes!r}'
             ')'
