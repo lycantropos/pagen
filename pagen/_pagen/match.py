@@ -19,25 +19,11 @@ class LookaheadMatch:
     characters: ClassVar[str] = ''
     characters_count: ClassVar[int] = 0
 
-    @property
-    def rule_name(self, /) -> str | None:
-        return self._rule_name
-
-    __slots__ = ('_rule_name',)
-
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
             f'type {LookaheadMatch.__qualname__!r} '
             'is not an acceptable base type'
         )
-
-    def __new__(cls, rule_name: str | None = None, /) -> Self:
-        _validate_rule_name(rule_name)
-        self = super().__new__(cls)
-        self._rule_name = rule_name
-        return self
-
-    _rule_name: str | None
 
     @overload
     def __eq__(self, other: Self, /) -> bool:
@@ -48,14 +34,10 @@ class LookaheadMatch:
         pass
 
     def __eq__(self, other: Any, /) -> Any:
-        return (
-            self._rule_name == other._rule_name
-            if isinstance(other, LookaheadMatch)
-            else NotImplemented
-        )
+        return isinstance(other, LookaheadMatch) or NotImplemented
 
     def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self._rule_name!r})'
+        return f'{type(self).__qualname__}()'
 
 
 @final
@@ -68,29 +50,21 @@ class MatchLeaf:
     def characters_count(self, /) -> int:
         return len(self._characters)
 
-    @property
-    def rule_name(self, /) -> str | None:
-        return self._rule_name
-
-    __slots__ = '_characters', '_rule_name'
+    __slots__ = ('_characters',)
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
             f'type {MatchLeaf.__qualname__!r} is not an acceptable base type'
         )
 
-    def __new__(
-        cls, rule_name: str | None = None, /, *, characters: str
-    ) -> Self:
-        _validate_rule_name(rule_name)
+    def __new__(cls, /, *, characters: str) -> Self:
         if not isinstance(characters, str):
             raise TypeError(type(characters))
         self = super().__new__(cls)
-        self._characters, self._rule_name = characters, rule_name
+        self._characters = characters
         return self
 
     _characters: str
-    _rule_name: str | None
 
     @overload
     def __eq__(self, other: Self, /) -> bool:
@@ -102,22 +76,13 @@ class MatchLeaf:
 
     def __eq__(self, other: Any, /) -> Any:
         return (
-            (
-                self._rule_name == other._rule_name
-                and self._characters == other._characters
-            )
+            self._characters == other._characters
             if isinstance(other, MatchLeaf)
             else NotImplemented
         )
 
     def __repr__(self, /) -> str:
-        return (
-            f'{type(self).__qualname__}'
-            '('
-            f'{self._rule_name!r}, '
-            f'characters={self._characters!r}'
-            ')'
-        )
+        return f'{type(self).__qualname__}(characters={self._characters!r})'
 
 
 @final
@@ -136,25 +101,14 @@ class MatchTree:
     def children(self, /) -> Sequence[MatchTreeChild]:
         return self._children
 
-    @property
-    def rule_name(self, /) -> str | None:
-        return self._rule_name
-
-    __slots__ = '_children', '_rule_name'
+    __slots__ = ('_children',)
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
             f'type {MatchTree.__qualname__!r} is not an acceptable base type'
         )
 
-    def __new__(
-        cls,
-        rule_name: str | None = None,
-        /,
-        *,
-        children: Sequence[MatchTreeChild],
-    ) -> Self:
-        _validate_rule_name(rule_name)
+    def __new__(cls, /, *, children: Sequence[MatchTreeChild]) -> Self:
         if len(children) < cls.MIN_CHILDREN_COUNT:
             raise ValueError(
                 f'Expected at least {cls.MIN_CHILDREN_COUNT!r} children, '
@@ -175,11 +129,10 @@ class MatchTree:
                 f'but got {invalid_children!r}.'
             )
         self = super().__new__(cls)
-        self._children, self._rule_name = children, rule_name
+        self._children = children
         return self
 
     _children: Sequence[MatchTreeChild]
-    _rule_name: str | None
 
     @overload
     def __eq__(self, other: Self, /) -> bool:
@@ -191,21 +144,13 @@ class MatchTree:
 
     def __eq__(self, other: Any, /) -> Any:
         return (
-            (
-                self._rule_name == other._rule_name
-                and self._children == other._children
-            )
+            self._children == other._children
             if isinstance(other, MatchTree)
             else NotImplemented
         )
 
     def __repr__(self, /) -> str:
-        return (
-            f'{type(self).__qualname__}('
-            f'{self._rule_name!r}, '
-            f'children={self.children!r}'
-            ')'
-        )
+        return f'{type(self).__qualname__}(children={self.children!r})'
 
 
 @final

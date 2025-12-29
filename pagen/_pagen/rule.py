@@ -86,16 +86,16 @@ class LeftRecursiveRule(Rule):
             expression_result = self._expression.evaluate(
                 text, index, cache=cache, rules=rules
             )
-            candidate_match = expression_result.match
+            expression_match = expression_result.match
             if (
-                candidate_match is None
-                or candidate_match.characters_count <= last_characters_count
+                expression_match is None
+                or expression_match.characters_count <= last_characters_count
             ):
                 break
             result = rule_cache[index] = _expression_result_to_rule_result(
                 expression_result, rule_name=self._name
             )
-            last_characters_count = candidate_match.characters_count
+            last_characters_count = expression_match.characters_count
         return result
 
     _expression: Expression[AnyMatch, AnyMismatch]

@@ -1271,7 +1271,7 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
         for _ in range(self._start):
             result = expression.evaluate(text, index, cache=cache, rules=rules)
             if (match := result.match) is not None:
-                assert is_match_tree_child(match)
+                assert is_match_tree_child(match), (expression, result)
                 children.append(match)
                 index += match.characters_count
             else:
@@ -1416,7 +1416,7 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
             result = expression.evaluate(text, index, cache=cache, rules=rules)
             if is_success(result):
                 match = result.match
-                assert is_match_tree_child(match)
+                assert is_match_tree_child(match), (expression, result)
                 matches.append(match)
                 index += match.characters_count
             else:
@@ -1430,7 +1430,7 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
             assert self.is_valid_result(result)
             if is_success(result):
                 match = result.match
-                assert is_match_tree_child(match)
+                assert is_match_tree_child(match), (expression, result)
                 matches.append(match)
                 index += match.characters_count
             else:
