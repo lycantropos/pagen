@@ -37,8 +37,7 @@ from .expressions import (
 )
 from .grammar import Grammar
 from .grammar_builder import GrammarBuilder
-from .match import AnyMatch, MatchLeaf, MatchTree
-from .mismatch import AnyMismatch
+from .match import AnyMatch, MatchTree, RuleMatch
 from .rule import Rule
 from .utils import to_package_non_abstract_subclasses
 
@@ -104,7 +103,7 @@ class RuleName(str, Enum):
         return self._value_
 
 
-def _build_parser_grammar() -> Grammar[AnyMatch, AnyMismatch]:
+def _build_parser_grammar() -> Grammar:
     grammar_builder = GrammarBuilder()
     grammar_builder.add_rule(
         RuleName.GRAMMAR,
@@ -760,7 +759,7 @@ def _build_parser_grammar() -> Grammar[AnyMatch, AnyMismatch]:
     return grammar_builder.build()
 
 
-PARSER_GRAMMAR: Final[Grammar[AnyMatch, AnyMismatch]] = _build_parser_grammar()
+PARSER_GRAMMAR: Final[Grammar] = _build_parser_grammar()
 assert (
     len(
         unsupported_classes := [
@@ -774,11 +773,8 @@ assert (
 
 
 def parse_grammar(
-    text: str,
-    /,
-    *,
-    parser_grammar: Grammar[AnyMatch, AnyMismatch] = PARSER_GRAMMAR,
-) -> Grammar[AnyMatch, AnyMismatch]:
+    text: str, /, *, parser_grammar: Grammar = PARSER_GRAMMAR
+) -> Grammar:
     tree = parser_grammar.parse(text, starting_rule_name='Grammar')
     grammar_builder = GrammarBuilder()
     TreeToGrammarVisitor(grammar_builder).visit(tree)
@@ -789,24 +785,31 @@ class MatchTreeVisitor:
     VISITOR_METHOD_PREFIX: ClassVar[str] = 'visit_'
 
     def visit(self, match: AnyMatch, /) -> None:
-        (
-            self.generic_visit
-            if (rule_name := match.rule_name) is None
-            else getattr(
-                self,
-                self.VISITOR_METHOD_PREFIX + rule_name,
-                self.generic_visit,
-            )
-        )(match)
+        if isinstance(match, RuleMatch):
+            self._visit_rule_match(match)
+        else:
+            self._generic_visit(match)
 
-    def generic_visit(self, match: AnyMatch, /) -> None:
+    def _generic_visit(self, match: AnyMatch, /) -> None:
+        if isinstance(match, RuleMatch):
+            self.visit(match.match)
+            return
         if not isinstance(match, MatchTree):
             return
         for child in match.children:
             self.visit(child)
 
+    def _visit_rule_match(self, match: RuleMatch, /) -> None:
+        getattr(
+            self,
+            self.VISITOR_METHOD_PREFIX + match.rule_name,
+            self._generic_visit,
+        )(match)
+
     def __init_subclass__(cls, /) -> None:
-        visitor_signature = inspect.signature(cls.visit, eval_str=True)
+        rule_match_visitor_signature = inspect.signature(
+            cls._visit_rule_match, eval_str=True
+        )
         invalid_visitors = [
             (name, signature)
             for name, field in vars(cls).items()
@@ -820,7 +823,7 @@ class MatchTreeVisitor:
                             else None
                         )
                     )
-                    != visitor_signature
+                    != rule_match_visitor_signature
                 )
             )
         ]
@@ -862,22 +865,18 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
     }
 
     def visit_AnyCharacterExpression(  # noqa: N802
-        self, match: AnyMatch, /
+        self, match: RuleMatch, /
     ) -> None:
-        assert isinstance(match, MatchTree), match
-        for child in match.children:
-            self.visit(child)
+        self.visit(match.match)
         self._expression_builder_indices[-1].append(
             self._grammar_builder.any_character_expression()
         )
 
     def visit_CharacterClassExpression(  # noqa: N802
-        self, match: AnyMatch, /
+        self, match: RuleMatch, /
     ) -> None:
-        assert isinstance(match, MatchTree), match
         with self._push_character_class_elements() as character_class_elements:
-            for child in match.children:
-                self.visit(child)
+            self.visit(match.match)
         self._expression_builder_indices[-1].append(
             self._grammar_builder.character_class_expression(
                 character_class_elements
@@ -885,9 +884,8 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         )
 
     def visit_CharacterContainerElement(  # noqa: N802
-        self, match: AnyMatch, /
+        self, match: RuleMatch, /
     ) -> None:
-        assert isinstance(match, MatchLeaf | MatchTree), match
         character = match.characters
         character = self._CHARACTER_CLASS_SPECIAL_CHARACTER_MAPPING.get(
             character, character
@@ -895,30 +893,24 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         assert len(character) == 1, character
         self._character_class_characters[-1].append(character)
 
-    def visit_CharacterRange(self, match: AnyMatch, /) -> None:  # noqa: N802
-        assert isinstance(match, MatchTree), match
+    def visit_CharacterRange(self, match: RuleMatch, /) -> None:  # noqa: N802
         with self._push_character_class_characters() as start_end:
-            for child in match.children:
-                self.visit(child)
+            self.visit(match.match)
         start, end = start_end
         self._character_class_elements[-1].append(CharacterRange(start, end))
 
-    def visit_CharacterSet(self, match: AnyMatch, /) -> None:  # noqa: N802
-        assert isinstance(match, MatchTree), match
+    def visit_CharacterSet(self, match: RuleMatch, /) -> None:  # noqa: N802
         with self._push_character_class_characters() as elements:
-            for child in match.children:
-                self.visit(child)
+            self.visit(match.match)
         self._character_class_elements[-1].append(
             CharacterSet(''.join(elements))
         )
 
     def visit_ComplementedCharacterClassExpression(  # noqa: N802
-        self, match: AnyMatch, /
+        self, match: RuleMatch, /
     ) -> None:
-        assert isinstance(match, MatchTree), match
         with self._push_character_class_elements() as character_class_elements:
-            for child in match.children:
-                self.visit(child)
+            self.visit(match.match)
         self._expression_builder_indices[-1].append(
             self._grammar_builder.complemented_character_class_expression(
                 character_class_elements
@@ -926,12 +918,10 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         )
 
     def visit_DoubleQuotedLiteralExpression(  # noqa: N802
-        self, match: AnyMatch, /
+        self, match: RuleMatch, /
     ) -> None:
-        assert isinstance(match, MatchTree), match
         with self._push_literal_characters() as characters:
-            for child in match.children:
-                self.visit(child)
+            self.visit(match.match)
         self._expression_builder_indices[-1].append(
             self._grammar_builder.double_quoted_literal_expression(
                 ''.join(characters)
@@ -939,9 +929,8 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         )
 
     def visit_DoubleQuotedLiteralExpressionCharacter(  # noqa: N802
-        self, match: AnyMatch, /
+        self, match: RuleMatch, /
     ) -> None:
-        assert isinstance(match, MatchLeaf | MatchTree), match
         character = match.characters
         character = self._DOUBLE_QUOTED_LITERAL_SPECIAL_CHARACTER_MAPPING.get(
             character, character
@@ -949,16 +938,14 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         assert len(character) == 1, character
         self._literal_characters[-1].append(character)
 
-    def visit_ExactRepetitionExpression(self, match: AnyMatch, /) -> None:
-        assert isinstance(match, MatchTree)
+    def visit_ExactRepetitionExpression(self, match: RuleMatch, /) -> None:
         with (
             self._push_expression_builder_indices() as (
                 expression_builder_indices
             ),
             self._push_unsigned_integers() as unsigned_integers,
         ):
-            for child in match.children:
-                self.visit(child)
+            self.visit(match.match)
         (expression_builder_index,) = expression_builder_indices
         (count,) = unsigned_integers
         self._expression_builder_indices[-1].append(
@@ -967,19 +954,16 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
             )
         )
 
-    def visit_Identifier(self, match: AnyMatch, /) -> None:  # noqa: N802
-        assert isinstance(match, MatchLeaf | MatchTree), match
+    def visit_Identifier(self, match: RuleMatch, /) -> None:  # noqa: N802
         self._identifiers.append(match.characters)
 
     def visit_NegativeLookaheadExpression(  # noqa: N802
-        self, match: AnyMatch, /
+        self, match: RuleMatch, /
     ) -> None:
-        assert isinstance(match, MatchTree), match
         with self._push_expression_builder_indices() as (
             expression_builder_indices
         ):
-            for child in match.children:
-                self.visit(child)
+            self.visit(match.match)
         (expression_builder_index,) = expression_builder_indices
         self._expression_builder_indices[-1].append(
             self._grammar_builder.negative_lookahead_expression(
@@ -988,14 +972,12 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         )
 
     def visit_OneOrMoreExpression(  # noqa: N802
-        self, match: AnyMatch, /
+        self, match: RuleMatch, /
     ) -> None:
-        assert isinstance(match, MatchTree), match
         with self._push_expression_builder_indices() as (
             expression_builder_indices
         ):
-            for child in match.children:
-                self.visit(child)
+            self.visit(match.match)
         (expression_builder_index,) = expression_builder_indices
         self._expression_builder_indices[-1].append(
             self._grammar_builder.one_or_more_expression(
@@ -1004,17 +986,15 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         )
 
     def visit_PositiveOrMoreExpression(  # noqa: N802
-        self, match: AnyMatch, /
+        self, match: RuleMatch, /
     ) -> None:
-        assert isinstance(match, MatchTree), match
         with (
             self._push_expression_builder_indices() as (
                 expression_builder_indices
             ),
             self._push_unsigned_integers() as unsigned_integers,
         ):
-            for child in match.children:
-                self.visit(child)
+            self.visit(match.match)
         (expression_builder_index,) = expression_builder_indices
         (start,) = unsigned_integers
         self._expression_builder_indices[-1].append(
@@ -1024,17 +1004,15 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         )
 
     def visit_PositiveRepetitionRangeExpression(  # noqa: N802
-        self, match: AnyMatch, /
+        self, match: RuleMatch, /
     ) -> None:
-        assert isinstance(match, MatchTree), match
         with (
             self._push_expression_builder_indices() as (
                 expression_builder_indices
             ),
             self._push_unsigned_integers() as unsigned_integers,
         ):
-            for child in match.children:
-                self.visit(child)
+            self.visit(match.match)
         (expression_builder_index,) = expression_builder_indices
         start, end = unsigned_integers
         self._expression_builder_indices[-1].append(
@@ -1044,28 +1022,24 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         )
 
     def visit_OptionalExpression(  # noqa: N802
-        self, match: AnyMatch, /
+        self, match: RuleMatch, /
     ) -> None:
-        assert isinstance(match, MatchTree), match
         with self._push_expression_builder_indices() as (
             expression_builder_indices
         ):
-            for child in match.children:
-                self.visit(child)
+            self.visit(match.match)
         (expression_builder_index,) = expression_builder_indices
         self._expression_builder_indices[-1].append(
             self._grammar_builder.optional_expression(expression_builder_index)
         )
 
     def visit_PositiveLookaheadExpression(  # noqa: N802
-        self, match: AnyMatch, /
+        self, match: RuleMatch, /
     ) -> None:
-        assert isinstance(match, MatchTree), match
         with self._push_expression_builder_indices() as (
             expression_builder_indices
         ):
-            for child in match.children:
-                self.visit(child)
+            self.visit(match.match)
         (expression_builder_index,) = expression_builder_indices
         self._expression_builder_indices[-1].append(
             self._grammar_builder.positive_lookahead_expression(
@@ -1074,58 +1048,48 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         )
 
     def visit_PrioritizedChoiceExpression(  # noqa: N802
-        self, match: AnyMatch, /
+        self, match: RuleMatch, /
     ) -> None:
-        assert isinstance(match, MatchTree), match
         with (
             self._push_expression_builder_indices() as variant_builder_indices
         ):
-            for child in match.children:
-                self.visit(child)
+            self.visit(match.match)
         self._expression_builder_indices[-1].append(
             self._grammar_builder.prioritized_choice_expression(
                 variant_builder_indices
             )
         )
 
-    def visit_Rule(self, match: AnyMatch, /) -> None:  # noqa: N802
-        assert isinstance(match, MatchTree), match
+    def visit_Rule(self, match: RuleMatch, /) -> None:  # noqa: N802
         with self._push_expression_builder_indices() as (
             expression_builder_indices
         ):
-            for child in match.children:
-                self.visit(child)
+            self.visit(match.match)
         rule_name = self._identifiers.pop()
         (expression_builder_index,) = expression_builder_indices
         self._grammar_builder.add_rule(rule_name, expression_builder_index)
 
-    def visit_RuleReference(self, match: AnyMatch, /) -> None:  # noqa: N802
-        assert isinstance(match, MatchTree), match
-        for child in match.children:
-            self.visit(child)
+    def visit_RuleReference(self, match: RuleMatch, /) -> None:  # noqa: N802
+        self.visit(match.match)
         rule_name = self._identifiers.pop()
         self._expression_builder_indices[-1].append(
             self._grammar_builder.rule_reference(rule_name)
         )
 
     def visit_SequenceExpression(  # noqa: N802
-        self, match: AnyMatch, /
+        self, match: RuleMatch, /
     ) -> None:
-        assert isinstance(match, MatchTree), match
         with self._push_expression_builder_indices() as element_builders:
-            for child in match.children:
-                self.visit(child)
+            self.visit(match.match)
         self._expression_builder_indices[-1].append(
             self._grammar_builder.sequence_expression(element_builders)
         )
 
     def visit_SingleQuotedLiteralExpression(  # noqa: N802
-        self, match: AnyMatch, /
+        self, match: RuleMatch, /
     ) -> None:
-        assert isinstance(match, MatchTree), match
         with self._push_literal_characters() as characters:
-            for child in match.children:
-                self.visit(child)
+            self.visit(match.match)
         self._expression_builder_indices[-1].append(
             self._grammar_builder.single_quoted_literal_expression(
                 ''.join(characters)
@@ -1133,9 +1097,8 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         )
 
     def visit_SingleQuotedLiteralExpressionCharacter(  # noqa: N802
-        self, match: AnyMatch, /
+        self, match: RuleMatch, /
     ) -> None:
-        assert isinstance(match, MatchLeaf | MatchTree), match
         character = match.characters
         character = self._SINGLE_QUOTED_LITERAL_SPECIAL_CHARACTER_MAPPING.get(
             character, character
@@ -1143,21 +1106,18 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         assert len(character) == 1, character
         self._literal_characters[-1].append(character)
 
-    def visit_UnsignedInteger(self, match: AnyMatch, /) -> None:  # noqa: N802
-        assert isinstance(match, MatchLeaf | MatchTree), match
+    def visit_UnsignedInteger(self, match: RuleMatch, /) -> None:  # noqa: N802
         value = int(match.characters)
         assert value >= 0, value
         self._unsigned_integers[-1].append(value)
 
     def visit_ZeroOrMoreExpression(  # noqa: N802
-        self, match: AnyMatch, /
+        self, match: RuleMatch, /
     ) -> None:
-        assert isinstance(match, MatchTree), match
         with self._push_expression_builder_indices() as (
             expression_builder_indices
         ):
-            for child in match.children:
-                self.visit(child)
+            self.visit(match.match)
         (expression_builder_index,) = expression_builder_indices
         self._expression_builder_indices[-1].append(
             self._grammar_builder.zero_or_more_expression(
@@ -1166,17 +1126,15 @@ class TreeToGrammarVisitor(MatchTreeVisitor):
         )
 
     def visit_ZeroRepetitionRangeExpression(  # noqa: N802
-        self, match: AnyMatch, /
+        self, match: RuleMatch, /
     ) -> None:
-        assert isinstance(match, MatchTree), match
         with (
             self._push_expression_builder_indices() as (
                 expression_builder_indices
             ),
             self._push_unsigned_integers() as unsigned_integers,
         ):
-            for child in match.children:
-                self.visit(child)
+            self.visit(match.match)
         (expression_builder_index,) = expression_builder_indices
         (end,) = unsigned_integers
         self._expression_builder_indices[-1].append(

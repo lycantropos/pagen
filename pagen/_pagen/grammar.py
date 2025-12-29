@@ -3,13 +3,13 @@ from __future__ import annotations
 import sys
 from collections.abc import Iterable, Mapping, Sequence
 from functools import total_ordering
-from typing import Any, ClassVar, Generic, TypeAlias, final, overload
+from typing import Any, ClassVar, TypeAlias, final, overload
 
 from typing_extensions import Self, override
 
 from .expressions import is_failure, is_success
-from .match import MatchT_co
-from .mismatch import MismatchLeaf, MismatchT_co, MismatchTree
+from .match import RuleMatch
+from .mismatch import MismatchLeaf, MismatchTree
 from .rule import Rule
 
 if sys.version_info < (3, 11):
@@ -18,16 +18,16 @@ if sys.version_info < (3, 11):
 MismatchOriginPath: TypeAlias = Sequence[str]
 
 
-class Grammar(Generic[MatchT_co, MismatchT_co]):
+class Grammar:
     MIN_RULES_COUNT: ClassVar[int] = 1
 
     @property
     def rule_names(self, /) -> Sequence[str]:
         return list(self._rules)
 
-    def parse(self, value: str, /, *, starting_rule_name: str) -> MatchT_co:
+    def parse(self, value: str, /, *, starting_rule_name: str) -> RuleMatch:
         result = self._rules[starting_rule_name].parse(
-            value, 0, cache={}, rule_name=None, rules=self._rules
+            value, 0, cache={}, rules=self._rules
         )
         if is_failure(result):
             grouped_origin_path_with_expected_message_pairs: dict[
@@ -76,23 +76,25 @@ class Grammar(Generic[MatchT_co, MismatchT_co]):
                 f'{value[match.characters_count :]!r} '
                 'is unprocessed by the parser'
             )
-        assert match.characters_count == len(value), (result, value)
-        assert self._rules[starting_rule_name].expression.is_valid_match(
-            match
-        ), (result, starting_rule_name)
+        assert match.characters_count == len(value), (
+            result,
+            starting_rule_name,
+            value,
+        )
+        assert match.rule_name == starting_rule_name, (
+            result,
+            starting_rule_name,
+        )
+        assert isinstance(match, RuleMatch), (result, starting_rule_name)
         return match
 
     _line_separator: str | None
-    _rules: Mapping[str, Rule[MatchT_co, MismatchT_co]]
+    _rules: Mapping[str, Rule]
 
     __slots__ = ('_line_separator', '_rules')
 
     def __new__(
-        cls,
-        rules: Mapping[str, Rule[MatchT_co, MismatchT_co]],
-        /,
-        *,
-        line_separator: str | None = '\n',
+        cls, rules: Mapping[str, Rule], /, *, line_separator: str | None = '\n'
     ) -> Self:
         if not isinstance(rules, Mapping):
             raise TypeError(type(rules))

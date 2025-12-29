@@ -16,6 +16,7 @@ from typing_extensions import Self
 
 @final
 class LookaheadMatch:
+    characters: ClassVar[str] = ''
     characters_count: ClassVar[int] = 0
 
     @property
@@ -30,7 +31,7 @@ class LookaheadMatch:
             'is not an acceptable base type'
         )
 
-    def __new__(cls, rule_name: str | None, /) -> Self:
+    def __new__(cls, rule_name: str | None = None, /) -> Self:
         _validate_rule_name(rule_name)
         self = super().__new__(cls)
         self._rule_name = rule_name
@@ -78,7 +79,9 @@ class MatchLeaf:
             f'type {MatchLeaf.__qualname__!r} is not an acceptable base type'
         )
 
-    def __new__(cls, rule_name: str | None, /, *, characters: str) -> Self:
+    def __new__(
+        cls, rule_name: str | None = None, /, *, characters: str
+    ) -> Self:
         _validate_rule_name(rule_name)
         if not isinstance(characters, str):
             raise TypeError(type(characters))
@@ -146,10 +149,10 @@ class MatchTree:
 
     def __new__(
         cls,
-        rule_name: str | None,
+        rule_name: str | None = None,
         /,
         *,
-        children: Sequence[MatchLeaf | MatchTree],
+        children: Sequence[MatchTreeChild],
     ) -> Self:
         _validate_rule_name(rule_name)
         if len(children) < cls.MIN_CHILDREN_COUNT:
@@ -162,7 +165,7 @@ class MatchTree:
                 invalid_children := [
                     child
                     for child in children
-                    if not isinstance(child, MatchTreeChild)
+                    if not is_match_tree_child(child)
                 ]
             )
             > 0
@@ -205,22 +208,90 @@ class MatchTree:
         )
 
 
-AnyMatch: TypeAlias = LookaheadMatch | MatchLeaf | MatchTree
+@final
+class RuleMatch:
+    @property
+    def characters(self, /) -> str:
+        return self._match.characters
+
+    @property
+    def characters_count(self, /) -> int:
+        return self._match.characters_count
+
+    @property
+    def match(self, /) -> AnyMatch:
+        return self._match
+
+    @property
+    def rule_name(self, /) -> str:
+        return self._rule_name
+
+    __slots__ = '_match', '_rule_name'
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {RuleMatch.__qualname__!r} is not an acceptable base type'
+        )
+
+    def __new__(cls, rule_name: str, /, *, match: AnyMatch) -> Self:
+        _validate_rule_name(rule_name)
+        if not isinstance(
+            match, LookaheadMatch | MatchLeaf | MatchTree | RuleMatch
+        ):
+            raise TypeError(type(match))
+        self = super().__new__(cls)
+        self._match, self._rule_name = match, rule_name
+        return self
+
+    _match: AnyMatch
+    _rule_name: str
+
+    @overload
+    def __eq__(self, other: Self, /) -> bool:
+        pass
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any:
+        pass
+
+    def __eq__(self, other: Any, /) -> Any:
+        return (
+            (
+                self._rule_name == other._rule_name
+                and self._match == other._match
+            )
+            if isinstance(other, RuleMatch)
+            else NotImplemented
+        )
+
+    def __repr__(self, /) -> str:
+        return (
+            f'{type(self).__qualname__}('
+            f'rule_name={self._rule_name!r}, '
+            f'match={self._match!r}'
+            ')'
+        )
+
+
+AnyMatch: TypeAlias = LookaheadMatch | MatchLeaf | MatchTree | RuleMatch
+MatchTreeChild: TypeAlias = MatchLeaf | MatchTree | RuleMatch
 MatchT_co = TypeVar(
     'MatchT_co',
     LookaheadMatch,
     MatchLeaf,
     MatchTree,
     LookaheadMatch | MatchTree,
-    MatchLeaf | MatchTree,
+    MatchTreeChild,
     AnyMatch,
+    RuleMatch,
     covariant=True,
 )
-MatchTreeChild: TypeAlias = MatchLeaf | MatchTree
 
 
 def is_match_tree_child(value: AnyMatch, /) -> TypeGuard[MatchTreeChild]:
-    return isinstance(value, MatchTreeChild)
+    return isinstance(value, MatchLeaf | MatchTree) or (
+        isinstance(value, RuleMatch) and is_match_tree_child(value.match)
+    )
 
 
 def _validate_rule_name(rule_name: str | None, /) -> None:

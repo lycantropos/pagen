@@ -65,7 +65,7 @@ class GrammarBuilder:
             AnyCharacterExpressionBuilder()
         )
 
-    def build(self, /) -> Grammar[AnyMatch, AnyMismatch]:
+    def build(self, /) -> Grammar:
         self._validate()
         return self._build()
 
@@ -172,7 +172,7 @@ class GrammarBuilder:
     _expression_builders: list[ExpressionBuilder[AnyMatch, AnyMismatch]]
     _rule_expression_builder_indices: dict[str, int]
 
-    def _build(self, /) -> Grammar[AnyMatch, AnyMismatch]:
+    def _build(self, /) -> Grammar:
         return Grammar(
             {
                 rule_name: (

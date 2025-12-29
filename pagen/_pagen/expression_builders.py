@@ -33,7 +33,15 @@ from .expressions import (
     ZeroOrMoreExpression,
     ZeroRepetitionRangeExpression,
 )
-from .match import AnyMatch, LookaheadMatch, MatchLeaf, MatchT_co, MatchTree
+from .match import (
+    AnyMatch,
+    LookaheadMatch,
+    MatchLeaf,
+    MatchT_co,
+    MatchTree,
+    MatchTreeChild,
+    RuleMatch,
+)
 from .mismatch import AnyMismatch, MismatchLeaf, MismatchT_co, MismatchTree
 
 
@@ -636,11 +644,11 @@ class ExactRepetitionExpressionBuilder(
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-    ) -> ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]:
+    ) -> ExpressionBuilder[MatchTreeChild, AnyMismatch]:
         result = expression_builders[self._expression_builder_index]
         assert _is_expression_builder(
             result,
-            expected_match_cls=MatchLeaf | MatchTree,
+            expected_match_cls=MatchLeaf | MatchTree | RuleMatch,
             expected_mismatch_cls=AnyMismatch,
             expression_builders=expression_builders,
             rule_expression_builder_indices=rule_expression_builder_indices,
@@ -977,11 +985,11 @@ class NegativeLookaheadExpressionBuilder(
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-    ) -> ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]:
+    ) -> ExpressionBuilder[MatchTreeChild, AnyMismatch]:
         result = expression_builders[self._expression_builder_index]
         assert _is_expression_builder(
             result,
-            expected_match_cls=MatchLeaf | MatchTree,
+            expected_match_cls=MatchLeaf | MatchTree | RuleMatch,
             expected_mismatch_cls=AnyMismatch,
             expression_builders=expression_builders,
             rule_expression_builder_indices=rule_expression_builder_indices,
@@ -1170,11 +1178,11 @@ class OneOrMoreExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-    ) -> ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]:
+    ) -> ExpressionBuilder[MatchTreeChild, AnyMismatch]:
         result = expression_builders[self._expression_builder_index]
         assert _is_expression_builder(
             result,
-            expected_match_cls=MatchLeaf | MatchTree,
+            expected_match_cls=MatchLeaf | MatchTree | RuleMatch,
             expected_mismatch_cls=AnyMismatch,
             expression_builders=expression_builders,
             rule_expression_builder_indices=rule_expression_builder_indices,
@@ -1322,11 +1330,11 @@ class OptionalExpressionBuilder(ExpressionBuilder[AnyMatch, AnyMismatch]):
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-    ) -> ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]:
+    ) -> ExpressionBuilder[MatchTreeChild, AnyMismatch]:
         result = expression_builders[self._expression_builder_index]
         assert _is_expression_builder(
             result,
-            expected_match_cls=MatchLeaf | MatchTree,
+            expected_match_cls=MatchLeaf | MatchTree | RuleMatch,
             expected_mismatch_cls=AnyMismatch,
             expression_builders=expression_builders,
             rule_expression_builder_indices=rule_expression_builder_indices,
@@ -1513,11 +1521,11 @@ class PositiveLookaheadExpressionBuilder(
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-    ) -> ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]:
+    ) -> ExpressionBuilder[MatchTreeChild, AnyMismatch]:
         result = expression_builders[self._expression_builder_index]
         assert _is_expression_builder(
             result,
-            expected_match_cls=MatchLeaf | MatchTree,
+            expected_match_cls=MatchLeaf | MatchTree | RuleMatch,
             expected_mismatch_cls=AnyMismatch,
             expression_builders=expression_builders,
             rule_expression_builder_indices=rule_expression_builder_indices,
@@ -1694,11 +1702,11 @@ class PositiveOrMoreExpressionBuilder(
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-    ) -> ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]:
+    ) -> ExpressionBuilder[MatchTreeChild, AnyMismatch]:
         result = expression_builders[self._expression_builder_index]
         assert _is_expression_builder(
             result,
-            expected_match_cls=MatchLeaf | MatchTree,
+            expected_match_cls=MatchLeaf | MatchTree | RuleMatch,
             expected_mismatch_cls=AnyMismatch,
             expression_builders=expression_builders,
             rule_expression_builder_indices=rule_expression_builder_indices,
@@ -1888,11 +1896,11 @@ class PositiveRepetitionRangeExpressionBuilder(
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-    ) -> ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]:
+    ) -> ExpressionBuilder[MatchTreeChild, AnyMismatch]:
         result = expression_builders[self._expression_builder_index]
         assert _is_expression_builder(
             result,
-            expected_match_cls=MatchLeaf | MatchTree,
+            expected_match_cls=MatchLeaf | MatchTree | RuleMatch,
             expected_mismatch_cls=AnyMismatch,
             expression_builders=expression_builders,
             rule_expression_builder_indices=rule_expression_builder_indices,
@@ -2194,7 +2202,7 @@ class PrioritizedChoiceExpressionBuilder(
 
 
 @final
-class RuleReferenceBuilder(ExpressionBuilder[AnyMatch, AnyMismatch]):
+class RuleReferenceBuilder(ExpressionBuilder[RuleMatch, AnyMismatch]):
     @override
     def always_matches(
         self,
@@ -2254,15 +2262,6 @@ class RuleReferenceBuilder(ExpressionBuilder[AnyMatch, AnyMismatch]):
             if not isinstance(candidate, RuleReferenceBuilder):
                 return RuleReference(
                     self._name,
-                    match_classes=list(
-                        candidate.to_match_classes(
-                            expression_builders=expression_builders,
-                            rule_expression_builder_indices=(
-                                rule_expression_builder_indices
-                            ),
-                            visited_rule_names=set(),
-                        )
-                    ),
                     mismatch_classes=list(
                         candidate.to_mismatch_classes(
                             expression_builders=expression_builders,
@@ -2375,19 +2374,8 @@ class RuleReferenceBuilder(ExpressionBuilder[AnyMatch, AnyMismatch]):
         ],
         rule_expression_builder_indices: Mapping[str, int],
         visited_rule_names: set[str],
-    ) -> Iterable[type[AnyMatch]]:
-        if self._name in visited_rule_names:
-            return
-        visited_rule_names.add(self._name)
-        yield from self._resolve(
-            expression_builders=expression_builders,
-            rule_expression_builder_indices=rule_expression_builder_indices,
-        ).to_match_classes(
-            expression_builders=expression_builders,
-            rule_expression_builder_indices=rule_expression_builder_indices,
-            visited_rule_names=visited_rule_names,
-        )
-        visited_rule_names.remove(self._name)
+    ) -> Iterable[type[RuleMatch]]:
+        yield RuleMatch
 
     @override
     def _to_mismatch_classes_impl(
@@ -2759,11 +2747,11 @@ class ZeroOrMoreExpressionBuilder(
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-    ) -> ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]:
+    ) -> ExpressionBuilder[MatchTreeChild, AnyMismatch]:
         result = expression_builders[self._expression_builder_index]
         assert _is_expression_builder(
             result,
-            expected_match_cls=MatchLeaf | MatchTree,
+            expected_match_cls=MatchLeaf | MatchTree | RuleMatch,
             expected_mismatch_cls=AnyMismatch,
             expression_builders=expression_builders,
             rule_expression_builder_indices=rule_expression_builder_indices,
@@ -2954,11 +2942,11 @@ class ZeroRepetitionRangeExpressionBuilder(
             ExpressionBuilder[AnyMatch, AnyMismatch]
         ],
         rule_expression_builder_indices: Mapping[str, int],
-    ) -> ExpressionBuilder[MatchLeaf | MatchTree, AnyMismatch]:
+    ) -> ExpressionBuilder[MatchTreeChild, AnyMismatch]:
         result = expression_builders[self._expression_builder_index]
         assert _is_expression_builder(
             result,
-            expected_match_cls=MatchLeaf | MatchTree,
+            expected_match_cls=MatchLeaf | MatchTree | RuleMatch,
             expected_mismatch_cls=AnyMismatch,
             expression_builders=expression_builders,
             rule_expression_builder_indices=rule_expression_builder_indices,
