@@ -72,9 +72,7 @@ class LeftRecursiveRule(Rule):
         rule_cache = cache.setdefault(self._name, {})
         if (result := rule_cache.get(index)) is not None:
             return result
-        rule_cache[index] = self._expression.to_seed_failure(
-            self._name, rules=rules
-        )
+        rule_cache[index] = self._expression.to_seed_failure(rules=rules)
         result = rule_cache[index] = _expression_result_to_rule_result(
             self._expression.evaluate(text, index, cache=cache, rules=rules),
             rule_name=self._name,

@@ -195,7 +195,7 @@ class Expression(ABC, Generic[MatchT_co, MismatchT_co]):
 
     @abstractmethod
     def to_seed_failure(
-        self, rule_name: str | None, /, *, rules: Mapping[str, Rule]
+        self, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationFailure[MismatchT_co]:
         raise NotImplementedError
 
@@ -262,7 +262,7 @@ class AnyCharacterExpression(Expression[MatchLeaf, MismatchLeaf]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /, *, rules: Mapping[str, Rule]
+        self, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationFailure[MismatchLeaf]:
         return EvaluationFailure(
             MismatchLeaf(
@@ -357,7 +357,7 @@ class CharacterClassExpression(Expression[MatchLeaf, MismatchLeaf]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /, *, rules: Mapping[str, Rule]
+        self, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationFailure[MismatchLeaf]:
         return EvaluationFailure(
             MismatchLeaf(
@@ -473,7 +473,7 @@ class ComplementedCharacterClassExpression(
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /, *, rules: Mapping[str, Rule]
+        self, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationFailure[MismatchLeaf]:
         return EvaluationFailure(
             MismatchLeaf(
@@ -586,7 +586,7 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /, *, rules: Mapping[str, Rule]
+        self, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationFailure[MismatchTree]:
         return EvaluationFailure(
             MismatchTree(
@@ -707,7 +707,7 @@ class LiteralExpression(Expression[MatchLeaf, MismatchLeaf]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /, *, rules: Mapping[str, Rule]
+        self, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationFailure[MismatchLeaf]:
         return EvaluationFailure(
             MismatchLeaf(
@@ -857,7 +857,7 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /, *, rules: Mapping[str, Rule]
+        self, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationFailure[MismatchLeaf]:
         return EvaluationFailure(
             MismatchLeaf(
@@ -977,7 +977,7 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /, *, rules: Mapping[str, Rule]
+        self, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationFailure[MismatchTree]:
         return EvaluationFailure(
             MismatchTree(
@@ -1084,7 +1084,7 @@ class OptionalExpression(Expression[AnyMatch, AnyMismatch]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /, *, rules: Mapping[str, Rule]
+        self, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationFailure[AnyMismatch]:
         raise ValueError(self)
 
@@ -1186,7 +1186,7 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /, *, rules: Mapping[str, Rule]
+        self, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationFailure[MismatchLeaf]:
         return EvaluationFailure(
             MismatchLeaf(
@@ -1308,7 +1308,7 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /, *, rules: Mapping[str, Rule]
+        self, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationFailure[MismatchTree]:
         return EvaluationFailure(
             MismatchTree(
@@ -1462,7 +1462,7 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /, *, rules: Mapping[str, Rule]
+        self, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationFailure[MismatchTree]:
         return EvaluationFailure(
             MismatchTree(
@@ -1606,7 +1606,7 @@ class PrioritizedChoiceExpression(Expression[AnyMatch, MismatchTree]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /, *, rules: Mapping[str, Rule]
+        self, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationFailure[MismatchTree]:
         return EvaluationFailure(
             MismatchTree(
@@ -1714,10 +1714,10 @@ class RuleReference(Expression[RuleMatch, AnyMismatch]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /, *, rules: Mapping[str, Rule]
+        self, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationFailure[AnyMismatch]:
         return self._resolve(rules=rules).expression.to_seed_failure(
-            rule_name, rules=rules
+            rules=rules
         )
 
     _mismatch_classes: Sequence[type[AnyMismatch]]
@@ -1861,7 +1861,7 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /, *, rules: Mapping[str, Rule]
+        self, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationFailure[MismatchTree]:
         return EvaluationFailure(
             MismatchTree(
@@ -2000,7 +2000,7 @@ class ZeroOrMoreExpression(
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /, *, rules: Mapping[str, Rule]
+        self, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationFailure[MismatchTree]:
         return EvaluationFailure(
             MismatchTree(
@@ -2136,7 +2136,7 @@ class ZeroRepetitionRangeExpression(
 
     @override
     def to_seed_failure(
-        self, rule_name: str | None, /, *, rules: Mapping[str, Rule]
+        self, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationFailure[AnyMismatch]:
         raise ValueError(self)
 
