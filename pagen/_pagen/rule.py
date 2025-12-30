@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Sequence
 from typing import Any, final, overload
 
 from typing_extensions import Self, override
@@ -207,7 +207,7 @@ class Rule(ABC):
 
     @abstractmethod
     def parse(
-        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
+        self, text: str, index: int, /, *, rules: Sequence[Rule]
     ) -> EvaluationResult[RuleMatch, AnyMismatch]:
         raise NotImplementedError
 
@@ -223,7 +223,7 @@ class LeftRecursiveRule(Rule):
 
     @override
     def parse(
-        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
+        self, text: str, index: int, /, *, rules: Sequence[Rule]
     ) -> EvaluationResult[RuleMatch, AnyMismatch]:
         cache = self._cache
         if (result := cache.get(index)) is not None:
@@ -305,7 +305,7 @@ class NonLeftRecursiveRule(Rule):
 
     @override
     def parse(
-        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
+        self, text: str, index: int, /, *, rules: Sequence[Rule]
     ) -> EvaluationResult[RuleMatch, AnyMismatch]:
         rule_cache = self._cache
         if (result := rule_cache.get(index)) is not None:

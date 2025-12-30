@@ -2286,6 +2286,7 @@ class RuleReferenceBuilder(ExpressionBuilder[RuleMatch, AnyMismatch]):
             if not isinstance(candidate, RuleReferenceBuilder):
                 return RuleReference(
                     self._name,
+                    self._index,
                     mismatch_classes=list(
                         candidate.to_mismatch_classes(
                             expression_builders=expression_builders,

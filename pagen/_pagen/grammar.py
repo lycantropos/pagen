@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Sequence
 from functools import total_ordering
 from typing import Any, ClassVar, TypeAlias, final, overload
 
@@ -23,14 +23,15 @@ class Grammar:
 
     @property
     def rule_names(self, /) -> Sequence[str]:
-        return list(self._rule_builders)
+        return self._rule_names
 
     def parse(self, value: str, /, *, starting_rule_name: str) -> RuleMatch:
-        rules = {
-            rule_name: rule_builder.build()
-            for rule_name, rule_builder in self._rule_builders.items()
-        }
-        result = rules[starting_rule_name].parse(value, 0, rules=rules)
+        try:
+            starting_rule_index = self._rule_names.index(starting_rule_name)
+        except ValueError:
+            raise ValueError(starting_rule_name) from None
+        rules = [rule_builder.build() for rule_builder in self._rule_builders]
+        result = rules[starting_rule_index].parse(value, 0, rules=rules)
         if is_failure(result):
             grouped_origin_path_with_expected_message_pairs: dict[
                 tuple[TextPosition, TextPosition],
@@ -91,18 +92,22 @@ class Grammar:
         return match
 
     _line_separator: str | None
-    _rule_builders: Mapping[str, RuleBuilder]
+    _rule_builders: Sequence[RuleBuilder]
+    _rule_names: Sequence[str]
 
-    __slots__ = ('_line_separator', '_rule_builders')
+    __slots__ = '_line_separator', '_rule_builders', '_rule_names'
 
     def __new__(
         cls,
-        rule_builders: Mapping[str, RuleBuilder],
+        rule_names: Sequence[str],
+        rule_builders: Sequence[RuleBuilder],
         /,
         *,
         line_separator: str | None = '\n',
     ) -> Self:
-        if not isinstance(rule_builders, Mapping):
+        if not isinstance(rule_names, Sequence):
+            raise TypeError(type(rule_names))
+        if not isinstance(rule_builders, Sequence):
             raise TypeError(type(rule_builders))
         if not isinstance(line_separator, str | None):
             raise TypeError(type(line_separator))
@@ -112,10 +117,13 @@ class Grammar:
                 'rule builders expected, '
                 f'but got {len(rule_builders)!r}.'
             )
+        if len(rule_names) != len(rule_builders):
+            raise ValueError((rule_names, rule_builders))
         self = super().__new__(cls)
-        self._line_separator, self._rule_builders = (
+        self._line_separator, self._rule_builders, self._rule_names = (
             line_separator,
             rule_builders,
+            rule_names,
         )
         return self
 
@@ -128,18 +136,26 @@ class Grammar:
     @override
     def __eq__(self, other: Any, /) -> Any:
         return (
-            self._rule_builders == other._rule_builders
+            (
+                self._rule_names == other._rule_names
+                and self._rule_builders == other._rule_builders
+            )
             if isinstance(other, Grammar)
             else NotImplemented
         )
 
     @override
     def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self._rule_builders!r})'
+        return (
+            f'{type(self).__qualname__}'
+            '('
+            f'{self._rule_names!r}, {self._rule_builders!r}'
+            ')'
+        )
 
     @override
     def __str__(self, /) -> str:
-        return '\n'.join(map(str, self._rule_builders.values()))
+        return '\n'.join(map(str, self._rule_builders))
 
 
 class ParsingError(Exception):

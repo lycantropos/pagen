@@ -213,8 +213,9 @@ class GrammarBuilder:
             self._get_validated_rule_expression_builder_indices()
         )
         return Grammar(
-            {
-                self._rule_names[rule_index]: (
+            self._rule_names,
+            [
+                (
                     LeftRecursiveRuleBuilder
                     if (
                         rule_expression_builder := self._expression_builders[
@@ -240,7 +241,7 @@ class GrammarBuilder:
                 for (rule_index, rule_expression_builder_index) in enumerate(
                     rule_expression_builder_indices
                 )
-            }
+            ],
         )
 
     def _get_validated_rule_expression_builder_indices(
