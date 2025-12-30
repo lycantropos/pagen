@@ -156,7 +156,7 @@ MismatchT_co = TypeVar(
 def _validate_index(index: int) -> None:
     if not isinstance(index, int):
         raise TypeError(type(index))
-    if index not in range(sys.maxsize + 1):
+    if not (0 <= index <= sys.maxsize):
         raise ValueError(index)
 
 

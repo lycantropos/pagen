@@ -17,7 +17,53 @@ from .match import AnyMatch, RuleMatch
 from .mismatch import AnyMismatch
 
 
-class Rule(ABC):
+@final
+class RuleData:
+    @property
+    def expression(self, /) -> Expression[AnyMatch, AnyMismatch]:
+        return self._expression
+
+    @property
+    def name(self, /) -> str:
+        return self._name
+
+    _expression: Expression[AnyMatch, AnyMismatch]
+    _name: str
+
+    __slots__ = '_expression', '_name'
+
+    def __new__(
+        cls, name: str, expression: Expression[AnyMatch, AnyMismatch], /
+    ) -> Self:
+        self = super().__new__(cls)
+        self._expression, self._name = expression, name
+        return self
+
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any, /) -> Any:
+        return (
+            (
+                self._name == other._name
+                and self._expression == other._expression
+            )
+            if isinstance(other, RuleData)
+            else NotImplemented
+        )
+
+    @override
+    def __repr__(self, /) -> str:
+        return (
+            f'{type(self).__qualname__}({self._name!r}, {self._expression!r})'
+        )
+
+
+class RuleBuilder(ABC):
     @property
     @abstractmethod
     def expression(self, /) -> Expression[AnyMatch, AnyMismatch]:
@@ -29,15 +75,7 @@ class Rule(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def parse(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
-    ) -> EvaluationResult[RuleMatch, AnyMismatch]:
+    def build(self, /) -> Rule:
         raise NotImplementedError
 
     __slots__ = ()
@@ -48,34 +86,152 @@ class Rule(ABC):
 
 
 @final
-class LeftRecursiveRule(Rule):
+class LeftRecursiveRuleBuilder(RuleBuilder):
     @property
     @override
     def expression(self, /) -> Expression[AnyMatch, AnyMismatch]:
-        return self._expression
+        return self._data.expression
 
     @property
     @override
     def name(self, /) -> str:
-        return self._name
+        return self._data.name
+
+    @override
+    def build(self, /) -> LeftRecursiveRule:
+        return LeftRecursiveRule(self._data, cache={})
+
+    _data: RuleData
+
+    __slots__ = ('_data',)
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {LeftRecursiveRuleBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
+    def __new__(
+        cls, name: str, expression: Expression[AnyMatch, AnyMismatch], /
+    ) -> Self:
+        self = super().__new__(cls)
+        self._data = RuleData(name, expression)
+        return self
+
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any, /) -> Any:
+        return (
+            self._data == other._data
+            if isinstance(other, LeftRecursiveRuleBuilder)
+            else NotImplemented
+        )
+
+    @override
+    def __repr__(self, /) -> str:
+        return (
+            f'{type(self).__qualname__}'
+            '('
+            f'{self._data.name!r}, {self._data.expression!r}'
+            ')'
+        )
+
+
+@final
+class NonLeftRecursiveRuleBuilder(RuleBuilder):
+    @property
+    @override
+    def expression(self, /) -> Expression[AnyMatch, AnyMismatch]:
+        return self._data.expression
+
+    @property
+    @override
+    def name(self, /) -> str:
+        return self._data.name
+
+    @override
+    def build(self, /) -> NonLeftRecursiveRule:
+        return NonLeftRecursiveRule(self._data, cache={})
+
+    _data: RuleData
+
+    __slots__ = ('_data',)
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {NonLeftRecursiveRuleBuilder.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
+    def __new__(
+        cls, name: str, expression: Expression[AnyMatch, AnyMismatch], /
+    ) -> Self:
+        self = super().__new__(cls)
+        self._data = RuleData(name, expression)
+        return self
+
+    @overload
+    def __eq__(self, other: Self, /) -> bool: ...
+
+    @overload
+    def __eq__(self, other: Any, /) -> Any: ...
+
+    @override
+    def __eq__(self, other: Any, /) -> Any:
+        return (
+            self._data == other._data
+            if isinstance(other, NonLeftRecursiveRuleBuilder)
+            else NotImplemented
+        )
+
+    @override
+    def __repr__(self, /) -> str:
+        return (
+            f'{type(self).__qualname__}'
+            '('
+            f'{self._data.name!r}, {self._data.expression!r}'
+            ')'
+        )
+
+
+class Rule(ABC):
+    @property
+    @abstractmethod
+    def expression(self, /) -> Expression[AnyMatch, AnyMismatch]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def parse(
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
+    ) -> EvaluationResult[RuleMatch, AnyMismatch]:
+        raise NotImplementedError
+
+    __slots__ = ()
+
+
+@final
+class LeftRecursiveRule(Rule):
+    @property
+    @override
+    def expression(self, /) -> Expression[AnyMatch, AnyMismatch]:
+        return self._data.expression
 
     @override
     def parse(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationResult[RuleMatch, AnyMismatch]:
-        rule_cache = cache.setdefault(self._name, {})
-        if (result := rule_cache.get(index)) is not None:
+        cache = self._cache
+        if (result := cache.get(index)) is not None:
             return result
-        rule_cache[index] = self._expression.to_seed_failure(rules=rules)
-        result = rule_cache[index] = _expression_result_to_rule_result(
-            self._expression.evaluate(text, index, cache=cache, rules=rules),
-            rule_name=self._name,
+        expression, name = self._data.expression, self._data.name
+        cache[index] = expression.to_seed_failure(rules=rules)
+        result = cache[index] = _expression_result_to_rule_result(
+            expression.evaluate(text, index, rules=rules), rule_name=name
         )
         result_match = result.match
         if result_match is None:
@@ -83,25 +239,23 @@ class LeftRecursiveRule(Rule):
             return result
         last_characters_count = result_match.characters_count
         while True:
-            expression_result = self._expression.evaluate(
-                text, index, cache=cache, rules=rules
-            )
+            expression_result = expression.evaluate(text, index, rules=rules)
             expression_match = expression_result.match
             if (
                 expression_match is None
                 or expression_match.characters_count <= last_characters_count
             ):
                 break
-            result = rule_cache[index] = _expression_result_to_rule_result(
-                expression_result, rule_name=self._name
+            result = cache[index] = _expression_result_to_rule_result(
+                expression_result, rule_name=name
             )
             last_characters_count = expression_match.characters_count
         return result
 
-    _expression: Expression[AnyMatch, AnyMismatch]
-    _name: str
+    _cache: dict[int, EvaluationResult[RuleMatch, AnyMismatch]]
+    _data: RuleData
 
-    __slots__ = '_expression', '_name'
+    __slots__ = '_cache', '_data'
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
@@ -111,10 +265,14 @@ class LeftRecursiveRule(Rule):
 
     @override
     def __new__(
-        cls, name: str, expression: Expression[AnyMatch, AnyMismatch], /
+        cls,
+        data: RuleData,
+        /,
+        *,
+        cache: dict[int, EvaluationResult[RuleMatch, AnyMismatch]],
     ) -> Self:
         self = super().__new__(cls)
-        self._expression, self._name = expression, name
+        self._cache, self._data = cache, data
         return self
 
     @overload
@@ -126,10 +284,7 @@ class LeftRecursiveRule(Rule):
     @override
     def __eq__(self, other: Any, /) -> Any:
         return (
-            (
-                self._name == other._name
-                and self._expression == other._expression
-            )
+            (self._data == other._data and self._cache == other._cache)
             if isinstance(other, LeftRecursiveRule)
             else NotImplemented
         )
@@ -137,7 +292,7 @@ class LeftRecursiveRule(Rule):
     @override
     def __repr__(self, /) -> str:
         return (
-            f'{type(self).__qualname__}({self._name!r}, {self._expression!r})'
+            f'{type(self).__qualname__}({self._data!r}, cache={self._cache!r})'
         )
 
 
@@ -146,39 +301,29 @@ class NonLeftRecursiveRule(Rule):
     @property
     @override
     def expression(self, /) -> Expression[AnyMatch, AnyMismatch]:
-        return self._expression
-
-    @property
-    @override
-    def name(self, /) -> str:
-        return self._name
+        return self._data.expression
 
     @override
     def parse(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationResult[RuleMatch, AnyMismatch]:
-        rule_cache = cache.setdefault(self._name, {})
+        rule_cache = self._cache
         if (result := rule_cache.get(index)) is not None:
             assert (
-                not is_success(result) or result.match.rule_name == self._name
+                not is_success(result)
+                or result.match.rule_name == self._data.name
             )
             return result
         result = rule_cache[index] = _expression_result_to_rule_result(
-            self._expression.evaluate(text, index, cache=cache, rules=rules),
-            rule_name=self._name,
+            self._data.expression.evaluate(text, index, rules=rules),
+            rule_name=self._data.name,
         )
         return result
 
-    _expression: Expression[AnyMatch, AnyMismatch]
-    _name: str
+    _cache: dict[int, EvaluationResult[RuleMatch, AnyMismatch]]
+    _data: RuleData
 
-    __slots__ = '_expression', '_name'
+    __slots__ = '_cache', '_data'
 
     def __init_subclass__(cls, /) -> None:
         raise TypeError(
@@ -187,10 +332,14 @@ class NonLeftRecursiveRule(Rule):
         )
 
     def __new__(
-        cls, name: str, expression: Expression[AnyMatch, AnyMismatch], /
+        cls,
+        data: RuleData,
+        /,
+        *,
+        cache: dict[int, EvaluationResult[RuleMatch, AnyMismatch]],
     ) -> Self:
         self = super().__new__(cls)
-        self._expression, self._name = expression, name
+        self._cache, self._data = cache, data
         return self
 
     @overload
@@ -202,10 +351,7 @@ class NonLeftRecursiveRule(Rule):
     @override
     def __eq__(self, other: Any, /) -> Any:
         return (
-            (
-                self._name == other._name
-                and self._expression == other._expression
-            )
+            (self._data == other._data and self._cache == other._cache)
             if isinstance(other, NonLeftRecursiveRule)
             else NotImplemented
         )
@@ -213,7 +359,7 @@ class NonLeftRecursiveRule(Rule):
     @override
     def __repr__(self, /) -> str:
         return (
-            f'{type(self).__qualname__}({self._name!r}, {self._expression!r})'
+            f'{type(self).__qualname__}({self._data!r}, cache={self._cache!r})'
         )
 
 

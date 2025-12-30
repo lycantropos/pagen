@@ -2186,7 +2186,7 @@ class PrioritizedChoiceExpressionBuilder(
                 invalid_value_variant_builder_indices := [
                     variant_builder_index
                     for variant_builder_index in variant_builder_indices
-                    if variant_builder_index not in range(sys.maxsize + 1)
+                    if not (0 <= variant_builder_index <= sys.maxsize)
                 ]
             )
             > 0
@@ -2620,7 +2620,7 @@ class SequenceExpressionBuilder(ExpressionBuilder[MatchTree, MismatchTree]):
                 invalid_value_element_builder_indices := [
                     element_builder_index
                     for element_builder_index in element_builder_indices
-                    if element_builder_index not in range(sys.maxsize + 1)
+                    if not (0 <= element_builder_index <= sys.maxsize)
                 ]
             )
             > 0
@@ -3043,7 +3043,7 @@ def _is_expression_builder(
 def _validate_expression_builder_index(value: Any, /) -> None:
     if not isinstance(value, int):
         raise TypeError(type(value))
-    if value not in range(sys.maxsize + 1):
+    if not (0 <= value <= sys.maxsize):
         raise ValueError(value)
 
 

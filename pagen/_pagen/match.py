@@ -211,9 +211,9 @@ class RuleMatch:
 
     def __repr__(self, /) -> str:
         return (
-            f'{type(self).__qualname__}('
-            f'rule_name={self._rule_name!r}, '
-            f'match={self._match!r}'
+            f'{type(self).__qualname__}'
+            '('
+            f'rule_name={self._rule_name!r}, match={self._match!r}'
             ')'
         )
 

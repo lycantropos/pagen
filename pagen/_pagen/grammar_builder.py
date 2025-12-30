@@ -29,7 +29,7 @@ from .expression_builders import (
 from .grammar import Grammar
 from .match import AnyMatch
 from .mismatch import AnyMismatch
-from .rule import LeftRecursiveRule, NonLeftRecursiveRule
+from .rule import LeftRecursiveRuleBuilder, NonLeftRecursiveRuleBuilder
 
 
 class GrammarBuilder:
@@ -176,7 +176,7 @@ class GrammarBuilder:
         return Grammar(
             {
                 rule_name: (
-                    LeftRecursiveRule
+                    LeftRecursiveRuleBuilder
                     if (
                         rule_expression_builder := self._expression_builders[
                             rule_expression_builder_index
@@ -188,7 +188,7 @@ class GrammarBuilder:
                         ),
                         visited_rule_names=set(),
                     )
-                    else NonLeftRecursiveRule
+                    else NonLeftRecursiveRuleBuilder
                 )(
                     rule_name,
                     rule_expression_builder.build(

@@ -147,13 +147,7 @@ class Expression(ABC, Generic[MatchT_co, MismatchT_co]):
 
     @abstractmethod
     def evaluate(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationResult[MatchT_co, MismatchT_co]:
         raise NotImplementedError
 
@@ -227,13 +221,7 @@ class AnyCharacterExpression(Expression[MatchLeaf, MismatchLeaf]):
 
     @override
     def evaluate(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationResult[MatchLeaf, MismatchLeaf]:
         return (
             EvaluationSuccess(MatchLeaf(characters=text[index]), None)
@@ -312,13 +300,7 @@ class CharacterClassExpression(Expression[MatchLeaf, MismatchLeaf]):
 
     @override
     def evaluate(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationResult[MatchLeaf, MismatchLeaf]:
         if index >= len(text):
             return EvaluationFailure(
@@ -428,13 +410,7 @@ class ComplementedCharacterClassExpression(
 
     @override
     def evaluate(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationResult[MatchLeaf, MismatchLeaf]:
         if index >= len(text):
             return EvaluationFailure(
@@ -546,18 +522,12 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def evaluate(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationResult[MatchTree, MismatchTree]:
         children: list[MatchTreeChild] = []
         expression = self._expression
         for _ in range(self._count):
-            result = expression.evaluate(text, index, cache=cache, rules=rules)
+            result = expression.evaluate(text, index, rules=rules)
             if (match := result.match) is not None:
                 assert is_match_tree_child(match), (expression, result)
                 children.append(match)
@@ -672,13 +642,7 @@ class LiteralExpression(Expression[MatchLeaf, MismatchLeaf]):
 
     @override
     def evaluate(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationResult[MatchLeaf, MismatchLeaf]:
         return (
             EvaluationFailure(
@@ -820,17 +784,9 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
 
     @override
     def evaluate(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationResult[LookaheadMatch, MismatchLeaf]:
-        result = self._expression.evaluate(
-            text, index, cache=cache, rules=rules
-        )
+        result = self._expression.evaluate(text, index, rules=rules)
         if is_success(result):
             return EvaluationFailure(
                 MismatchLeaf(
@@ -923,18 +879,10 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def evaluate(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationResult[MatchTree, MismatchTree]:
         expression = self._expression
-        first_result = expression.evaluate(
-            text, index, cache=cache, rules=rules
-        )
+        first_result = expression.evaluate(text, index, rules=rules)
         matches: list[MatchTreeChild]
         if is_success(first_result):
             first_match = first_result.match
@@ -947,9 +895,7 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
                 MismatchTree(str(self), children=[first_result.mismatch])
             )
         while is_success(
-            result := expression.evaluate(
-                text, index, cache=cache, rules=rules
-            )
+            result := expression.evaluate(text, index, rules=rules)
         ):
             match = result.match
             matches.append(match)
@@ -1051,17 +997,9 @@ class OptionalExpression(Expression[AnyMatch, AnyMismatch]):
 
     @override
     def evaluate(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationSuccess[AnyMatch, AnyMismatch]:
-        result = self._expression.evaluate(
-            text, index, cache=cache, rules=rules
-        )
+        result = self._expression.evaluate(text, index, rules=rules)
         if is_success(result):
             return result
         assert is_failure(result), (self._expression, result)
@@ -1146,17 +1084,9 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
 
     @override
     def evaluate(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationResult[LookaheadMatch, MismatchLeaf]:
-        result = self._expression.evaluate(
-            text, index, cache=cache, rules=rules
-        )
+        result = self._expression.evaluate(text, index, rules=rules)
         if is_failure(result):
             assert result.mismatch.start_index == index, (
                 self._expression,
@@ -1258,18 +1188,12 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def evaluate(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationResult[MatchTree, MismatchTree]:
         children: list[MatchTreeChild] = []
         expression = self._expression
         for _ in range(self._start):
-            result = expression.evaluate(text, index, cache=cache, rules=rules)
+            result = expression.evaluate(text, index, rules=rules)
             if (match := result.match) is not None:
                 assert is_match_tree_child(match), (expression, result)
                 children.append(match)
@@ -1280,9 +1204,7 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
                     MismatchTree(str(self), children=[result.mismatch])
                 )
         while is_success(
-            result := expression.evaluate(
-                text, index, cache=cache, rules=rules
-            )
+            result := expression.evaluate(text, index, rules=rules)
         ):
             match = result.match
             assert is_match_tree_child(match), (expression, result)
@@ -1402,18 +1324,12 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def evaluate(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationResult[MatchTree, MismatchTree]:
         matches: list[MatchTreeChild] = []
         expression = self._expression
         for _ in range(self._start):
-            result = expression.evaluate(text, index, cache=cache, rules=rules)
+            result = expression.evaluate(text, index, rules=rules)
             if is_success(result):
                 match = result.match
                 assert is_match_tree_child(match), (expression, result)
@@ -1426,7 +1342,7 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
                 )
         final_mismatch: AnyMismatch | None = None
         for _ in range(self._start, self._end):
-            result = expression.evaluate(text, index, cache=cache, rules=rules)
+            result = expression.evaluate(text, index, rules=rules)
             assert self.is_valid_result(result)
             if is_success(result):
                 match = result.match
@@ -1566,19 +1482,11 @@ class PrioritizedChoiceExpression(Expression[AnyMatch, MismatchTree]):
 
     @override
     def evaluate(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationResult[MatchT_co, MismatchTree]:
         variant_mismatches: list[AnyMismatch] = []
         for variant in self._variants:
-            variant_result = variant.evaluate(
-                text, index, cache=cache, rules=rules
-            )
+            variant_result = variant.evaluate(text, index, rules=rules)
             if is_success(variant_result):
                 return variant_result
             else:
@@ -1686,17 +1594,9 @@ class RuleReference(Expression[RuleMatch, AnyMismatch]):
 
     @override
     def evaluate(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationResult[RuleMatch, AnyMismatch]:
-        return self._resolve(rules=rules).parse(
-            text, index, cache=cache, rules=rules
-        )
+        return self._resolve(rules=rules).parse(text, index, rules=rules)
 
     @override
     def to_expected_message(self, /, *, rules: Mapping[str, Rule]) -> str:
@@ -1788,19 +1688,11 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
 
     @override
     def evaluate(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationResult[MatchTree, MismatchTree]:
         element_successes: list[EvaluationSuccess[AnyMatch, AnyMismatch]] = []
         for element in self._elements:
-            element_result = element.evaluate(
-                text, index, cache=cache, rules=rules
-            )
+            element_result = element.evaluate(text, index, rules=rules)
             if is_success(element_result):
                 element_successes.append(element_result)
                 element_match = element_result.match
@@ -1951,20 +1843,12 @@ class ZeroOrMoreExpression(
 
     @override
     def evaluate(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationSuccess[LookaheadMatch | MatchTree, MismatchTree]:
         matches: list[MatchTreeChild] = []
         expression = self._expression
         while is_success(
-            result := expression.evaluate(
-                text, index, cache=cache, rules=rules
-            )
+            result := expression.evaluate(text, index, rules=rules)
         ):
             match = result.match
             assert is_match_tree_child(match), (expression, result)
@@ -2082,19 +1966,13 @@ class ZeroRepetitionRangeExpression(
 
     @override
     def evaluate(
-        self,
-        text: str,
-        index: int,
-        /,
-        *,
-        cache: dict[str, dict[int, EvaluationResult[RuleMatch, AnyMismatch]]],
-        rules: Mapping[str, Rule],
+        self, text: str, index: int, /, *, rules: Mapping[str, Rule]
     ) -> EvaluationSuccess[LookaheadMatch | MatchTree, AnyMismatch]:
         matches: list[MatchTreeChild] = []
         expression = self._expression
         final_mismatch: AnyMismatch | None = None
         for _ in range(self._end):
-            result = expression.evaluate(text, index, cache=cache, rules=rules)
+            result = expression.evaluate(text, index, rules=rules)
             if is_success(result):
                 match = result.match
                 assert is_match_tree_child(match), (expression, result)

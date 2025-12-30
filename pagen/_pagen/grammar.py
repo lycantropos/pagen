@@ -10,7 +10,7 @@ from typing_extensions import Self, override
 from .expressions import is_failure, is_success
 from .match import RuleMatch
 from .mismatch import MismatchLeaf, MismatchTree
-from .rule import Rule
+from .rule import RuleBuilder
 
 if sys.version_info < (3, 11):
     from exceptiongroup import ExceptionGroup
@@ -19,16 +19,18 @@ MismatchOriginPath: TypeAlias = Sequence[str]
 
 
 class Grammar:
-    MIN_RULES_COUNT: ClassVar[int] = 1
+    MIN_RULE_BUILDERS_COUNT: ClassVar[int] = 1
 
     @property
     def rule_names(self, /) -> Sequence[str]:
-        return list(self._rules)
+        return list(self._rule_builders)
 
     def parse(self, value: str, /, *, starting_rule_name: str) -> RuleMatch:
-        result = self._rules[starting_rule_name].parse(
-            value, 0, cache={}, rules=self._rules
-        )
+        rules = {
+            rule_name: rule_builder.build()
+            for rule_name, rule_builder in self._rule_builders.items()
+        }
+        result = rules[starting_rule_name].parse(value, 0, rules=rules)
         if is_failure(result):
             grouped_origin_path_with_expected_message_pairs: dict[
                 tuple[TextPosition, TextPosition],
@@ -89,24 +91,32 @@ class Grammar:
         return match
 
     _line_separator: str | None
-    _rules: Mapping[str, Rule]
+    _rule_builders: Mapping[str, RuleBuilder]
 
-    __slots__ = ('_line_separator', '_rules')
+    __slots__ = ('_line_separator', '_rule_builders')
 
     def __new__(
-        cls, rules: Mapping[str, Rule], /, *, line_separator: str | None = '\n'
+        cls,
+        rule_builders: Mapping[str, RuleBuilder],
+        /,
+        *,
+        line_separator: str | None = '\n',
     ) -> Self:
-        if not isinstance(rules, Mapping):
-            raise TypeError(type(rules))
+        if not isinstance(rule_builders, Mapping):
+            raise TypeError(type(rule_builders))
         if not isinstance(line_separator, str | None):
             raise TypeError(type(line_separator))
-        if len(rules) < cls.MIN_RULES_COUNT:
+        if len(rule_builders) < cls.MIN_RULE_BUILDERS_COUNT:
             raise ValueError(
-                f'At least {cls.MIN_RULES_COUNT!r} expected, '
-                f'but got {rules!r}.'
+                f'At least {cls.MIN_RULE_BUILDERS_COUNT!r} '
+                'rule builders expected, '
+                f'but got {len(rule_builders)!r}.'
             )
         self = super().__new__(cls)
-        self._line_separator, self._rules = line_separator, rules
+        self._line_separator, self._rule_builders = (
+            line_separator,
+            rule_builders,
+        )
         return self
 
     @overload
@@ -118,18 +128,18 @@ class Grammar:
     @override
     def __eq__(self, other: Any, /) -> Any:
         return (
-            self._rules == other._rules
+            self._rule_builders == other._rule_builders
             if isinstance(other, Grammar)
             else NotImplemented
         )
 
     @override
     def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self._rules!r})'
+        return f'{type(self).__qualname__}({self._rule_builders!r})'
 
     @override
     def __str__(self, /) -> str:
-        return '\n'.join(map(str, self._rules.values()))
+        return '\n'.join(map(str, self._rule_builders.values()))
 
 
 class ParsingError(Exception):
