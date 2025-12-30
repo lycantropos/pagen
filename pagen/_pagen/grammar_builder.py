@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from functools import singledispatch
+from typing import TypeGuard, TypeVar
 
 from typing_extensions import override
 
@@ -33,32 +34,55 @@ from .rule import LeftRecursiveRuleBuilder, NonLeftRecursiveRuleBuilder
 
 
 class GrammarBuilder:
-    def add_rule(self, name: str, expression_builder_index: int, /) -> None:
-        expression_builder_index_range = range(len(self._expression_builders))
-        if expression_builder_index not in expression_builder_index_range:
+    @property
+    def rule_names(self, /) -> Sequence[str]:
+        return self._rule_names
+
+    def add_rule(
+        self, rule_name: str, rule_expression_builder_index: int, /
+    ) -> None:
+        rule_expression_builder_index_range = range(
+            len(self._expression_builders)
+        )
+        if (
+            rule_expression_builder_index
+            not in rule_expression_builder_index_range
+        ):
             raise ValueError(
                 'Expression builder index is out of range: '
-                f'{expression_builder_index!r} is not '
-                f'in {expression_builder_index_range!r}.'
+                f'{rule_expression_builder_index!r} is not '
+                f'in {rule_expression_builder_index_range!r}.'
             )
-        if (
-            existing_expression_builder_index := (
-                self._rule_expression_builder_indices.get(name)
+        if rule_name in self._rule_names:
+            rule_index = self._rule_names.index(rule_name)
+            if (
+                existing_expression_builder_index := (
+                    self._rule_expression_builder_indices[rule_index]
+                )
+            ) is not None:
+                existing_expression_builder = self._expression_builders[
+                    existing_expression_builder_index
+                ]
+                expression_builder = self._expression_builders[
+                    rule_expression_builder_index
+                ]
+                raise ValueError(
+                    f'Rule redefinition is not allowed, '
+                    f'but for {rule_name!r} tried to replace '
+                    f'{existing_expression_builder!r} '
+                    f'with {expression_builder!r}.'
+                )
+            self._rule_expression_builder_indices[rule_index] = (
+                rule_expression_builder_index
             )
-        ) is not None:
-            existing_expression_builder = self._expression_builders[
-                existing_expression_builder_index
-            ]
-            expression_builder = self._expression_builders[
-                expression_builder_index
-            ]
-            raise ValueError(
-                f'Rule redefinition is not allowed, '
-                f'but for {name!r} tried to replace '
-                f'{existing_expression_builder!r} '
-                f'with {expression_builder!r}.'
+        else:
+            assert len(self._rule_names) == len(
+                self._rule_expression_builder_indices
+            ), self
+            self._rule_names.append(rule_name)
+            self._rule_expression_builder_indices.append(
+                rule_expression_builder_index
             )
-        self._rule_expression_builder_indices[name] = expression_builder_index
 
     def any_character_expression(self, /) -> int:
         return self._register_expression_builder(
@@ -142,8 +166,19 @@ class GrammarBuilder:
             PrioritizedChoiceExpressionBuilder(variant_builder_indices)
         )
 
-    def rule_reference(self, name: str, /) -> int:
-        return self._register_expression_builder(RuleReferenceBuilder(name))
+    def rule_reference(self, rule_name: str, /) -> int:
+        if rule_name in self._rule_names:
+            rule_index = self._rule_names.index(rule_name)
+        else:
+            rule_index = len(self._rule_names)
+            assert len(self._rule_names) == len(
+                self._rule_expression_builder_indices
+            ), self
+            self._rule_names.append(rule_name)
+            self._rule_expression_builder_indices.append(None)
+        return self._register_expression_builder(
+            RuleReferenceBuilder(rule_name, rule_index)
+        )
 
     def sequence_expression(
         self, element_builder_indices: Sequence[int], /
@@ -170,12 +205,16 @@ class GrammarBuilder:
         )
 
     _expression_builders: list[ExpressionBuilder[AnyMatch, AnyMismatch]]
-    _rule_expression_builder_indices: dict[str, int]
+    _rule_names: list[str]
+    _rule_expression_builder_indices: list[int | None]
 
     def _build(self, /) -> Grammar:
+        rule_expression_builder_indices = (
+            self._get_validated_rule_expression_builder_indices()
+        )
         return Grammar(
             {
-                rule_name: (
+                self._rule_names[rule_index]: (
                     LeftRecursiveRuleBuilder
                     if (
                         rule_expression_builder := self._expression_builders[
@@ -184,26 +223,43 @@ class GrammarBuilder:
                     ).is_left_recursive(
                         expression_builders=self._expression_builders,
                         rule_expression_builder_indices=(
-                            self._rule_expression_builder_indices
+                            rule_expression_builder_indices
                         ),
-                        visited_rule_names=set(),
+                        visited_rule_indices=set(),
                     )
                     else NonLeftRecursiveRuleBuilder
                 )(
-                    rule_name,
+                    self._rule_names[rule_index],
                     rule_expression_builder.build(
                         expression_builders=self._expression_builders,
                         rule_expression_builder_indices=(
-                            self._rule_expression_builder_indices
+                            rule_expression_builder_indices
                         ),
                     ),
                 )
-                for (
-                    rule_name,
-                    rule_expression_builder_index,
-                ) in self._rule_expression_builder_indices.items()
+                for (rule_index, rule_expression_builder_index) in enumerate(
+                    rule_expression_builder_indices
+                )
             }
         )
+
+    def _get_validated_rule_expression_builder_indices(
+        self, /
+    ) -> Sequence[int]:
+        result = self._rule_expression_builder_indices
+        if not _is_non_none_sequence(result):
+            unset_rule_names = [
+                self._rule_names[rule_index]
+                for rule_index, rule_expression_builder_index in enumerate(
+                    result
+                )
+                if rule_expression_builder_index is None
+            ]
+            raise ValueError(
+                'All rule expression builders should be set, '
+                f'but got {unset_rule_names!r}.'
+            )
+        return result
 
     def _register_expression_builder(
         self, expression_builder: ExpressionBuilder[AnyMatch, AnyMismatch], /
@@ -213,12 +269,18 @@ class GrammarBuilder:
         return result
 
     def _validate(self, /) -> None:
+        assert len(self._rule_names) == len(
+            self._rule_expression_builder_indices
+        ), self
+        rule_expression_builder_indices = (
+            self._get_validated_rule_expression_builder_indices()
+        )
         if (
             len(
-                non_terminating_rules := [
-                    rule_name
-                    for rule_name, rule_expression_builder_index in (
-                        self._rule_expression_builder_indices.items()
+                non_terminating_rule_names := [
+                    self._rule_names[rule_index]
+                    for rule_index, rule_expression_builder_index in enumerate(
+                        rule_expression_builder_indices
                     )
                     if not self._expression_builders[
                         rule_expression_builder_index
@@ -226,26 +288,24 @@ class GrammarBuilder:
                         expression_builders=self._expression_builders,
                         is_leftmost=True,
                         rule_expression_builder_indices=(
-                            self._rule_expression_builder_indices
+                            rule_expression_builder_indices
                         ),
-                        visited_rule_names=set(),
+                        visited_rule_indices=set(),
                     )
                 ]
             )
             > 0
         ):
-            non_terminating_rules.sort()
+            non_terminating_rule_names.sort()
             raise ValueError(
                 'All rules should be terminating, '
                 'but the following ones are not: '
-                f'{", ".join(map(repr, non_terminating_rules))}.'
+                f'{", ".join(map(repr, non_terminating_rule_names))}.'
             )
         used_expression_builder_indices = [False] * len(
             self._expression_builders
         )
-        for (
-            rule_expression_builder_index
-        ) in self._rule_expression_builder_indices.values():
+        for rule_expression_builder_index in rule_expression_builder_indices:
             used_expression_builder_indices[rule_expression_builder_index] = (
                 True
             )
@@ -267,14 +327,19 @@ class GrammarBuilder:
                 f'but got: {unused_expression_builders!r}.'
             )
 
-    __slots__ = '_expression_builders', '_rule_expression_builder_indices'
+    __slots__ = (
+        '_expression_builders',
+        '_rule_expression_builder_indices',
+        '_rule_names',
+    )
 
     def __init__(
         self,
         expression_builders: (
             list[ExpressionBuilder[AnyMatch, AnyMismatch]] | None
         ) = None,
-        rule_expression_indices: dict[str, int] | None = None,
+        rule_names: list[str] | None = None,
+        rule_expression_indices: list[int | None] | None = None,
         /,
     ) -> None:
         if not isinstance(expression_builders, list | None):
@@ -282,7 +347,8 @@ class GrammarBuilder:
         if not isinstance(rule_expression_indices, dict | None):
             raise TypeError(type(rule_expression_indices))
         self._expression_builders = expression_builders or []
-        self._rule_expression_builder_indices = rule_expression_indices or {}
+        self._rule_names = rule_names or []
+        self._rule_expression_builder_indices = rule_expression_indices or []
 
     @override
     def __repr__(self, /) -> str:
@@ -293,6 +359,15 @@ class GrammarBuilder:
             f'{self._rule_expression_builder_indices!r}'
             ')'
         )
+
+
+_T = TypeVar('_T')
+
+
+def _is_non_none_sequence(
+    value: Sequence[_T | None], /
+) -> TypeGuard[Sequence[_T]]:
+    return all(element is not None for element in value)
 
 
 @singledispatch

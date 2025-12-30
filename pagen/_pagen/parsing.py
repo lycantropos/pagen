@@ -735,10 +735,7 @@ def _build_parser_grammar() -> Grammar:
             extra_rule_names := [
                 rule_name
                 for rule_name in RuleName
-                if (
-                    rule_name
-                    not in grammar_builder._rule_expression_builder_indices
-                )
+                if rule_name not in grammar_builder.rule_names
             ]
         )
         == 0
@@ -748,10 +745,7 @@ def _build_parser_grammar() -> Grammar:
             missing_expression_classes := [
                 cls
                 for cls in to_package_non_abstract_subclasses(Expression)  # type: ignore[type-abstract]
-                if (
-                    cls.__name__
-                    not in grammar_builder._rule_expression_builder_indices
-                )
+                if cls.__name__ not in grammar_builder.rule_names
             ]
         )
         == 0
