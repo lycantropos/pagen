@@ -870,7 +870,7 @@ class SingleQuotedLiteralExpressionBuilder(LiteralExpressionBuilder):
 
 @final
 class NegativeLookaheadExpressionBuilder(
-    ExpressionBuilder[LookaheadMatch, MismatchLeaf]
+    ExpressionBuilder[LookaheadMatch, AnyMismatch]
 ):
     @property
     def expression_builder_index(self, /) -> int:
@@ -1589,7 +1589,7 @@ class PositiveLookaheadExpressionBuilder(
 
 @final
 class PositiveOrMoreExpressionBuilder(
-    ExpressionBuilder[MatchTree, MismatchTree]
+    ExpressionBuilder[MatchTree, AnyMismatch]
 ):
     @property
     def expression_builder_index(self, /) -> int:
@@ -1995,7 +1995,7 @@ class PositiveRepetitionRangeExpressionBuilder(
 
 @final
 class PrioritizedChoiceExpressionBuilder(
-    ExpressionBuilder[AnyMatch, MismatchTree]
+    ExpressionBuilder[AnyMatch, AnyMismatch]
 ):
     MIN_VARIANT_BUILDERS_COUNT: ClassVar[int] = 2
 

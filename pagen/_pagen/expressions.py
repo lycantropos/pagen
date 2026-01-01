@@ -10,6 +10,7 @@ from typing import (
     Any,
     ClassVar,
     Generic,
+    TypeAlias,
     TypeGuard,
     final,
     overload,
@@ -43,40 +44,44 @@ if TYPE_CHECKING:
     from .rule import Rule
 
 
-@unique
-class ExpressionPrecedence(IntEnum):
-    PRIORITIZED_CHOICE = auto()
-    SEQUENCE = auto()
-    REPETITION = auto()
-    LOOKAHEAD = auto()
-    TERM = auto()
-
-
-class EvaluationResult(ABC, Generic[MatchT_co, MismatchT_co]):
+@final
+class EvaluationFailure(Generic[MismatchT_co]):
     @property
-    @abstractmethod
-    def match(self, /) -> MatchT_co | None:
-        raise NotImplementedError
+    def match(self, /) -> None:
+        return None
 
     @property
-    @abstractmethod
-    def mismatch(self, /) -> MismatchT_co | None:
-        raise NotImplementedError
+    def mismatch(self, /) -> MismatchT_co:
+        return self._mismatch
 
-    @abstractmethod
+    _mismatch: MismatchT_co
+
+    __slots__ = ('_mismatch',)
+
+    def __init_subclass__(cls, /) -> None:
+        raise TypeError(
+            f'type {EvaluationFailure.__qualname__!r} '
+            'is not an acceptable base type'
+        )
+
+    @override
+    def __new__(cls, mismatch: MismatchT_co, /) -> Self:
+        self = super().__new__(cls)
+        self._mismatch = mismatch
+        return self
+
+    @override
     def __repr__(self, /) -> str:
-        raise NotImplementedError
+        return f'{type(self).__qualname__}({self._mismatch!r})'
 
 
 @final
-class EvaluationSuccess(EvaluationResult[MatchT_co, MismatchT_co]):
+class EvaluationSuccess(Generic[MatchT_co, MismatchT_co]):
     @property
-    @override
     def match(self, /) -> MatchT_co:
         return self._match
 
     @property
-    @override
     def mismatch(self, /) -> MismatchT_co | None:
         return self._mismatch
 
@@ -105,37 +110,10 @@ class EvaluationSuccess(EvaluationResult[MatchT_co, MismatchT_co]):
         )
 
 
-@final
-class EvaluationFailure(EvaluationResult[Any, MismatchT_co]):
-    @property
-    @override
-    def match(self, /) -> None:
-        return None
-
-    @property
-    @override
-    def mismatch(self, /) -> MismatchT_co:
-        return self._mismatch
-
-    _mismatch: MismatchT_co
-
-    __slots__ = ('_mismatch',)
-
-    def __init_subclass__(cls, /) -> None:
-        raise TypeError(
-            f'type {EvaluationFailure.__qualname__!r} '
-            'is not an acceptable base type'
-        )
-
-    @override
-    def __new__(cls, mismatch: MismatchT_co, /) -> Self:
-        self = super().__new__(cls)
-        self._mismatch = mismatch
-        return self
-
-    @override
-    def __repr__(self, /) -> str:
-        return f'{type(self).__qualname__}({self._mismatch!r})'
+EvaluationResult: TypeAlias = (
+    EvaluationSuccess[MatchT_co, MismatchT_co]
+    | EvaluationFailure[MismatchT_co]
+)
 
 
 class Expression(ABC, Generic[MatchT_co, MismatchT_co]):
@@ -143,7 +121,7 @@ class Expression(ABC, Generic[MatchT_co, MismatchT_co]):
 
     @classmethod
     @abstractmethod
-    def precedence(cls, /) -> int:
+    def precedence(cls, /) -> ExpressionPrecedence:
         raise NotImplementedError
 
     @abstractmethod
@@ -213,11 +191,20 @@ class Expression(ABC, Generic[MatchT_co, MismatchT_co]):
         raise NotImplementedError
 
 
+@unique
+class ExpressionPrecedence(IntEnum):
+    PRIORITIZED_CHOICE = auto()
+    SEQUENCE = auto()
+    REPETITION = auto()
+    LOOKAHEAD = auto()
+    TERM = auto()
+
+
 @final
 class AnyCharacterExpression(Expression[MatchLeaf, MismatchLeaf]):
     @classmethod
     @override
-    def precedence(cls, /) -> int:
+    def precedence(cls, /) -> ExpressionPrecedence:
         return ExpressionPrecedence.TERM
 
     @override
@@ -292,7 +279,7 @@ class CharacterClassExpression(Expression[MatchLeaf, MismatchLeaf]):
 
     @classmethod
     @override
-    def precedence(cls, /) -> int:
+    def precedence(cls, /) -> ExpressionPrecedence:
         return ExpressionPrecedence.TERM
 
     @property
@@ -402,7 +389,7 @@ class ComplementedCharacterClassExpression(
 
     @classmethod
     @override
-    def precedence(cls, /) -> int:
+    def precedence(cls, /) -> ExpressionPrecedence:
         return ExpressionPrecedence.TERM
 
     @property
@@ -510,7 +497,7 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
 
     @classmethod
     @override
-    def precedence(cls, /) -> int:
+    def precedence(cls, /) -> ExpressionPrecedence:
         return ExpressionPrecedence.REPETITION
 
     @property
@@ -529,12 +516,12 @@ class ExactRepetitionExpression(Expression[MatchTree, MismatchTree]):
         expression = self._expression
         for _ in range(self._count):
             result = expression.evaluate(text, index, rules=rules)
-            if (match := result.match) is not None:
+            if is_success(result):
+                match = result.match
                 assert is_match_tree_child(match), (expression, result)
                 children.append(match)
                 index += match.characters_count
             else:
-                assert is_failure(result), (expression, result)
                 return EvaluationFailure(
                     MismatchTree(str(self), children=[result.mismatch])
                 )
@@ -633,7 +620,7 @@ class LiteralExpression(Expression[MatchLeaf, MismatchLeaf]):
 
     @classmethod
     @override
-    def precedence(cls, /) -> int:
+    def precedence(cls, /) -> ExpressionPrecedence:
         return ExpressionPrecedence.TERM
 
     @property
@@ -773,10 +760,10 @@ class SingleQuotedLiteralExpression(LiteralExpression):
 
 
 @final
-class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
+class NegativeLookaheadExpression(Expression[LookaheadMatch, AnyMismatch]):
     @classmethod
     @override
-    def precedence(cls, /) -> int:
+    def precedence(cls, /) -> ExpressionPrecedence:
         return ExpressionPrecedence.LOOKAHEAD
 
     @property
@@ -786,10 +773,13 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
     @override
     def evaluate(
         self, text: str, index: int, /, *, rules: Sequence[Rule]
-    ) -> EvaluationResult[LookaheadMatch, MismatchLeaf]:
-        result = self._expression.evaluate(text, index, rules=rules)
-        if is_success(result):
-            return EvaluationFailure(
+    ) -> EvaluationResult[LookaheadMatch, AnyMismatch]:
+        return (
+            EvaluationSuccess(LookaheadMatch(), result.mismatch)
+            if is_failure(
+                result := self._expression.evaluate(text, index, rules=rules)
+            )
+            else EvaluationFailure(
                 MismatchLeaf(
                     str(self),
                     expected_message=self.to_expected_message(rules=rules),
@@ -797,8 +787,7 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
                     stop_index=index + result.match.characters_count,
                 )
             )
-        assert is_failure(result), (self._expression, result)
-        return EvaluationSuccess(LookaheadMatch(), result.mismatch)
+        )
 
     @override
     def to_expected_message(self, /, *, rules: Sequence[Rule]) -> str:
@@ -871,7 +860,7 @@ class NegativeLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
 class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
     @classmethod
     @override
-    def precedence(cls, /) -> int:
+    def precedence(cls, /) -> ExpressionPrecedence:
         return ExpressionPrecedence.REPETITION
 
     @property
@@ -891,7 +880,6 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
             matches = [first_match]
             index += first_match.characters_count
         else:
-            assert is_failure(first_result), (expression, first_result)
             return EvaluationFailure(
                 MismatchTree(str(self), children=[first_result.mismatch])
             )
@@ -902,7 +890,6 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
             matches.append(match)
             assert is_match_tree_child(match), (expression, result)
             index += match.characters_count
-        assert is_failure(result), (expression, result)
         return EvaluationSuccess(
             MatchTree(children=matches),
             MismatchTree(str(self), children=[result.mismatch]),
@@ -989,7 +976,7 @@ class OneOrMoreExpression(Expression[MatchTree, MismatchTree]):
 class OptionalExpression(Expression[AnyMatch, AnyMismatch]):
     @classmethod
     @override
-    def precedence(cls, /) -> int:
+    def precedence(cls, /) -> ExpressionPrecedence:
         return ExpressionPrecedence.REPETITION
 
     @property
@@ -1000,11 +987,13 @@ class OptionalExpression(Expression[AnyMatch, AnyMismatch]):
     def evaluate(
         self, text: str, index: int, /, *, rules: Sequence[Rule]
     ) -> EvaluationSuccess[AnyMatch, AnyMismatch]:
-        result = self._expression.evaluate(text, index, rules=rules)
-        if is_success(result):
-            return result
-        assert is_failure(result), (self._expression, result)
-        return EvaluationSuccess(LookaheadMatch(), result.mismatch)
+        return (
+            EvaluationSuccess(LookaheadMatch(), result.mismatch)
+            if is_failure(
+                result := self._expression.evaluate(text, index, rules=rules)
+            )
+            else result
+        )
 
     def to_expected_message(self, /, *, rules: Sequence[Rule]) -> str:
         return (
@@ -1076,7 +1065,7 @@ class OptionalExpression(Expression[AnyMatch, AnyMismatch]):
 class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
     @classmethod
     @override
-    def precedence(cls, /) -> int:
+    def precedence(cls, /) -> ExpressionPrecedence:
         return ExpressionPrecedence.LOOKAHEAD
 
     @property
@@ -1171,12 +1160,12 @@ class PositiveLookaheadExpression(Expression[LookaheadMatch, MismatchLeaf]):
 
 
 @final
-class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
+class PositiveOrMoreExpression(Expression[MatchTree, AnyMismatch]):
     MIN_START: ClassVar[int] = 2
 
     @classmethod
     @override
-    def precedence(cls, /) -> int:
+    def precedence(cls, /) -> ExpressionPrecedence:
         return ExpressionPrecedence.REPETITION
 
     @property
@@ -1190,17 +1179,17 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
     @override
     def evaluate(
         self, text: str, index: int, /, *, rules: Sequence[Rule]
-    ) -> EvaluationResult[MatchTree, MismatchTree]:
+    ) -> EvaluationResult[MatchTree, AnyMismatch]:
         children: list[MatchTreeChild] = []
         expression = self._expression
         for _ in range(self._start):
             result = expression.evaluate(text, index, rules=rules)
-            if (match := result.match) is not None:
+            if is_success(result):
+                match = result.match
                 assert is_match_tree_child(match), (expression, result)
                 children.append(match)
                 index += match.characters_count
             else:
-                assert is_failure(result), (expression, result)
                 return EvaluationFailure(
                     MismatchTree(str(self), children=[result.mismatch])
                 )
@@ -1211,7 +1200,6 @@ class PositiveOrMoreExpression(Expression[MatchTree, MismatchTree]):
             assert is_match_tree_child(match), (expression, result)
             children.append(match)
             index += match.characters_count
-        assert is_failure(result), (expression, result)
         return EvaluationSuccess(MatchTree(children=children), result.mismatch)
 
     @override
@@ -1308,7 +1296,7 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
 
     @classmethod
     @override
-    def precedence(cls, /) -> int:
+    def precedence(cls, /) -> ExpressionPrecedence:
         return ExpressionPrecedence.REPETITION
 
     @property
@@ -1337,7 +1325,6 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
                 matches.append(match)
                 index += match.characters_count
             else:
-                assert is_failure(result), (expression, result)
                 return EvaluationFailure(
                     MismatchTree(str(self), children=[result.mismatch])
                 )
@@ -1471,10 +1458,10 @@ class PositiveRepetitionRangeExpression(Expression[MatchTree, MismatchTree]):
 
 
 @final
-class PrioritizedChoiceExpression(Expression[AnyMatch, MismatchTree]):
+class PrioritizedChoiceExpression(Expression[AnyMatch, AnyMismatch]):
     @classmethod
     @override
-    def precedence(cls, /) -> int:
+    def precedence(cls, /) -> ExpressionPrecedence:
         return ExpressionPrecedence.PRIORITIZED_CHOICE
 
     @property
@@ -1484,14 +1471,13 @@ class PrioritizedChoiceExpression(Expression[AnyMatch, MismatchTree]):
     @override
     def evaluate(
         self, text: str, index: int, /, *, rules: Sequence[Rule]
-    ) -> EvaluationResult[MatchT_co, MismatchTree]:
+    ) -> EvaluationResult[AnyMatch, AnyMismatch]:
         variant_mismatches: list[AnyMismatch] = []
         for variant in self._variants:
             variant_result = variant.evaluate(text, index, rules=rules)
             if is_success(variant_result):
                 return variant_result
             else:
-                assert is_failure(variant_result), (variant, variant_result)
                 variant_mismatches.append(variant_result.mismatch)
         return EvaluationFailure(
             MismatchTree(str(self), children=variant_mismatches)
@@ -1590,7 +1576,7 @@ class PrioritizedChoiceExpression(Expression[AnyMatch, MismatchTree]):
 class RuleReference(Expression[RuleMatch, AnyMismatch]):
     @classmethod
     @override
-    def precedence(cls, /) -> int:
+    def precedence(cls, /) -> ExpressionPrecedence:
         return ExpressionPrecedence.TERM
 
     @override
@@ -1692,7 +1678,7 @@ class RuleReference(Expression[RuleMatch, AnyMismatch]):
 class SequenceExpression(Expression[MatchTree, MismatchTree]):
     @classmethod
     @override
-    def precedence(cls, /) -> int:
+    def precedence(cls, /) -> ExpressionPrecedence:
         return ExpressionPrecedence.SEQUENCE
 
     @property
@@ -1713,7 +1699,6 @@ class SequenceExpression(Expression[MatchTree, MismatchTree]):
                     continue
                 index += element_match.characters_count
             else:
-                assert is_failure(element_result), (element, element_result)
                 element_mismatch = element_result.mismatch
                 return EvaluationFailure(
                     MismatchTree(
@@ -1847,7 +1832,7 @@ class ZeroOrMoreExpression(
 ):
     @classmethod
     @override
-    def precedence(cls, /) -> int:
+    def precedence(cls, /) -> ExpressionPrecedence:
         return ExpressionPrecedence.REPETITION
 
     @property
@@ -1867,7 +1852,6 @@ class ZeroOrMoreExpression(
             assert is_match_tree_child(match), (expression, result)
             matches.append(match)
             index += match.characters_count
-        assert is_failure(result), (expression, result)
         return EvaluationSuccess(
             (
                 LookaheadMatch()
@@ -1966,7 +1950,7 @@ class ZeroRepetitionRangeExpression(
 
     @classmethod
     @override
-    def precedence(cls, /) -> int:
+    def precedence(cls, /) -> ExpressionPrecedence:
         return ExpressionPrecedence.REPETITION
 
     @property
