@@ -17,3 +17,14 @@ updates:
         update-types:
           - patch
           - minor
+  - package-ecosystem: rust-toolchain
+    directory: /
+    schedule:
+      interval: weekly
+    assignees:
+      - lycantropos
+    groups:
+      non-major:
+        update-types:
+          - patch
+          - minor
